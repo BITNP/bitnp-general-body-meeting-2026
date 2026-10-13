@@ -1,0 +1,1872 @@
+<script setup lang="ts">
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import * as THREE from 'three'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
+import type { BeaconConfig } from '../types'
+
+// 用 BASE_URL 前缀，保证部署到子路径（GitHub Pages）时也能正确加载
+const MODEL_URL = `${import.meta.env.BASE_URL}model/LiangxiangMap.glb`
+// 地面等高线模型（400×400 的平面等高线，含高程起伏）
+const CONTOUR_URL = `${import.meta.env.BASE_URL}model/contour.glb`
+
+// 组件参数：光柱配置（位置、标注文字、点击回调等）由外部传入
+// —— hoveredId / focusedId / paused 是全体大会展示页新增的三个参数：
+//    页面上的「据点按钮」也能驱动光柱高亮与聚焦，页面不可见时还能暂停渲染。
+const props = withDefaults(
+  defineProps<{
+    beacons: BeaconConfig[]
+    /** 外部指定要高亮的信标 id，效果等同于鼠标悬停在那根光柱上 */
+    hoveredId?: string | null
+    /** 外部指定要聚焦的信标 id，效果等同于点击那根光柱（镜头推近、其它光柱熄灭） */
+    focusedId?: string | null
+    /** 暂停渲染（画面与动画都停住），用于这一屏不在视口里时省电 */
+    paused?: boolean
+  }>(),
+  {
+    beacons: () => [],
+    hoveredId: null,
+    focusedId: null,
+    paused: false,
+  },
+)
+const emit = defineEmits<{
+  (e: 'beacon-select', beacon: BeaconConfig): void
+  (e: 'beacon-close'): void
+}>()
+
+// ---- 可调参数 ----------------------------------------------------------
+// 楼块颜色（纯白）
+const BUILDING_COLOR = 0xffffff
+// 水体表面：深蓝、粗糙（粗糙度越高越不产生刺眼高光）
+const WATER_SURFACE_COLOR = 0x0300af
+const WATER_EMISSIVE = 0x0a2f5c
+const WATER_EMISSIVE_INTENSITY = 0.25
+const WATER_ROUGHNESS = 0.3
+// 水体轮廓光：深蓝幽光（"发光"来自围绕水体的光环，而不是水面本身）
+const HALO_COLOR = 0x1b34ff
+const HALO_INTENSITY = 2.0
+const HALO_FALLOFF = 10.0 // 越大，光晕边缘衰减越快
+const HALO_WIDTH_RATIO = 0.005 // 光环宽度 = 模型水平尺寸 * 该比例
+const CONTOUR_COLOR = 0x96ecff
+const CONTOUR_OPACITY = 0.85
+
+// —— 初始坐标常量 ——
+// 模型初始中心位置（相对原点 / 网格中心）。相机初始位置不再由它决定。
+const INITIAL_COORD = { x: -400, y: 0, z: -300 }
+
+// —— 相机与缩放 ——
+// 相机到原点的初始距离（决定初始缩放）
+const CAMERA_START_DISTANCE = 800
+// 缩放范围：距离越小 = 放大（缩放比例大），距离越大 = 缩小（缩放比例小）
+const CAMERA_MIN_DISTANCE = 600
+const CAMERA_MAX_DISTANCE = 1800
+// 高度角与缩放耦合：缩小(距离最大)时 80°（近似俯视），放大(距离最小)时线性降到 30°
+const CAMERA_MAX_ELEVATION_DEG = 80
+const CAMERA_MIN_ELEVATION_DEG = 30
+// 相机注视点（也是网格径向渐变的中心）：相机始终看向它
+const CAMERA_TARGET = new THREE.Vector3(0, 0, 0)
+// —— 相机水平角（独立控制）——
+// 镜头在水平面内朝向的罗盘方向：0 = 北, 90 = 东, 180 = 南, 270 = 西。
+// 初始 0 即"上北下南"（模型约定：东 = +X，北 = -Z，来自 Blender/OSM 导出惯例；
+// 若你模型的朝向不同，只改这一个值即可）。
+const CAMERA_BEARING_DEG = -20
+
+// —— 视角微动（当前唯一的交互反馈）——
+// 不再支持滚轮缩放 / 拖拽旋转平移，改成：
+//   · PC：鼠标相对画面中心的位置
+//   · 移动端：陀螺仪（deviceorientation，iOS 需要用户手势里授权）
+// 两者都只产生"微小"的偏移，而且是叠加在既有动画结果之上的，
+// 不参与聚焦 / 缓动计算，所以不会影响据点切换动画的连续性。
+const LOOK_YAW_RANGE = 0.05 // 左右微转幅度（弧度，约 2.9°）
+const LOOK_PITCH_RANGE = 0.035 // 上下微俯仰幅度（弧度，约 2°）
+const LOOK_SHIFT_RATIO = 0.012 // 注视点微平移量（相对当前相机距离）
+const LOOK_EASE = 3.2 // 微动跟随速度（越大越跟手）
+// 陀螺仪：相对"首次姿态"的倾角映射到 -1~1；死区用来过滤静止时的手抖
+const LOOK_GYRO_RANGE_DEG = 16
+const LOOK_GYRO_DEAD_ZONE_DEG = 1.2
+// 真机上手感方向如果是反的，把对应系数改成 -1 即可
+const LOOK_GYRO_SIGN_X = 1
+const LOOK_GYRO_SIGN_Y = 1
+// 模型底面相对网格平面(原点 y=0)的抬高量，避免与网格线共面闪烁
+const MODEL_GROUND_LIFT = 1.0
+
+// —— 地面网格（固定在原点）——
+const GRID_COLOR = 0xffffff
+const GRID_OPACITY = 0.16
+// 网格边长 = 模型水平方向的较长边 × GRID_SPAN_RATIO
+const GRID_SPAN_RATIO = 1.0
+// 若 > 0，则直接使用这个绝对尺寸（单位与模型一致），忽略 GRID_SPAN_RATIO
+const GRID_SPAN = 4000
+// 网格被划分成多少格（越大格子越密、线越细）
+const GRID_DIVISIONS = 60
+// —— 网格径向淡出（从网格中心向外，超过开始半径后逐渐变淡，到结束半径完全消失）——
+// 用网格半边长(span / 2)的比例表示：0 = 中心，1 = 网格边缘
+const GRID_FADE_START_RATIO = 0.2
+// "结束半径"随缩放变化（相对网格半边长）：
+// 缩到最小时（相机最远）= MIN，放到最大时（相机最近）= MAX，中间线性
+const GRID_FADE_END_RATIO_MIN = 0.25
+const GRID_FADE_END_RATIO_MAX = 0.40
+// 淡出曲线指数：1 = 线性，越大越"晚"才开始明显变淡
+const GRID_FADE_CURVE = 1.5
+
+// —— 地面等高线（public/model/contour.glb）——
+// 源模型：平面 400×400，高程（Z）约 1~99；导出时会平移到模型中心下方的地面
+const CONTOUR_GROUND_COLOR = GRID_COLOR
+const CONTOUR_GROUND_OPACITY = GRID_OPACITY
+// 等高线"接棒"网格：从网格完全消失处（网格淡出结束半径）开始，向外经过该过渡带逐渐完全显现，
+// 之后不再衰减。过渡带宽度 = 等高线半边长 × 该比例。
+const CONTOUR_RISE_RATIO = 0.15
+// 接棒点相对"网格淡出结束半径"的倍数：1 = 严格从网格完全消失处开始（默认）；
+// < 1 会让等高线更早出现，与网格淡出的尾巴有一点重叠（想让等高线在默认视角里也看得见时可调小）。
+const CONTOUR_TAKEOVER_RATIO = 1.0
+// 等高线自身的"远处淡出"范围（用等高线半边长(span / 2)的比例表示）：
+// 到 CONTOUR_FADE_START 之后开始变淡，到 CONTOUR_FADE_END 完全消失，用来把方形的几何边界藏掉。
+const CONTOUR_FADE_START_RATIO = 0.8
+const CONTOUR_FADE_END_RATIO = 1.0
+// 等高线"完全消失半径"的上限（相对网格完全消失半径的倍数）：
+// 即等高线最晚也要在 2.0 × 网格消失半径处淡到 0；与上面的自身边缘淡出取更靠内的那个。
+const CONTOUR_FADE_MAX_RATIO = 2.0
+// 等高线铺满的地面边长（单位与模型一致）。默认与网格一致 = 4000（源模型 400 放大 10 倍）
+const CONTOUR_SPAN = GRID_SPAN
+// 若 CONTOUR_SPAN <= 0，则用"模型水平尺寸 × 该比例"代替
+const CONTOUR_SPAN_RATIO = GRID_SPAN_RATIO
+// 高程方向缩放：0 = 完全平铺在地面（避开楼块）；>0 时按源模型高程(1~99)放大成起伏地形
+const CONTOUR_HEIGHT_SCALE = 0
+// 地面（网格 / 等高线）所在的高度（模型底面被抬到 y = 1，这里保持 y = 0 即位于地图下方）
+const GROUND_Y = 0
+
+// —— 信标（黄色科幻光柱 + 黄色文字标注）——
+// 颜色 / 尺寸
+const BEACON_COLOR = 0xffd24a
+const BEACON_HEIGHT = 220
+const BEACON_RADIUS = 8
+const BEACON_CORE_RADIUS = 5
+const BEACON_OPACITY = 0.4
+const BEACON_CORE_OPACITY = 0.8
+const BEACON_INTENSITY = 1.7 // HDR 亮度倍数（初始亮度，>1 才会触发 Bloom 发光）
+// 悬停高亮（鼠标射线最接近的光柱）：更亮、更高、波纹更快、文字更大
+const BEACON_HOVER_RADIUS_RATIO = 0.05 // 判定半径 = 相机距离 * 该比例（约等于屏幕上的像素半径）
+const BEACON_HOVER_KEEP_MULTIPLIER = 1.5 // 迟滞：已悬停时保持的半径倍数，避免边界抖动
+const BEACON_HOVER_BRIGHTNESS = 1.9 // 亮度倍数
+const BEACON_HOVER_HEIGHT = 1.6 // 高度倍数
+const BEACON_HOVER_RIPPLE_SPEED = 2.2 // 波纹速度倍数
+const BEACON_HOVER_LABEL_SCALE = 1.35 // 文字大小倍数
+const BEACON_HOVER_EASE = 8 // 过渡速度（越大越快）
+// 上升粒子
+const BEACON_PARTICLE_COUNT = 60 // 每根光柱的粒子数
+const BEACON_PARTICLE_SIZE = 7 // 粒子直径（世界单位，按透视缩放）
+const BEACON_PARTICLE_OPACITY = 0.9
+const BEACON_PARTICLE_SPEED_MIN = 40 // 上升速度（世界单位/秒）最小值
+const BEACON_PARTICLE_SPEED_MAX = 110 // 最大值（速度随机）
+const BEACON_PARTICLE_HEIGHT_MIN = 0.45 // 上升距离（相对光柱高度）最小值
+const BEACON_PARTICLE_HEIGHT_MAX = 1.0 // 最大值（上升距离随机）
+const BEACON_PARTICLE_RADIUS = 6 // 粒子出现的水平半径范围
+// 底部圆形波纹
+const BEACON_RIPPLE_COUNT = 3
+const BEACON_RIPPLE_RADIUS = 120 // 波纹最大半径
+const BEACON_RIPPLE_SPEED = 0.2 // 每秒扩散圈数
+const BEACON_RIPPLE_THICKNESS = 0.06 // 环宽（0~1）
+const BEACON_RIPPLE_OPACITY = 0.9
+const BEACON_RIPPLE_LIFT = 1.0 // 相对模型底面的抬高，避免与地面共面闪烁
+// 文字标注
+const BEACON_LABEL_COLOR = '#ffd24a'
+const BEACON_LABEL_HEIGHT = 45 // 文字在世界里的高度
+const BEACON_LABEL_Y = 150 // 文字中心相对信标底部的高度
+// 文字"左边缘"相对光柱中心的水平距离。缩放时这个间隙保持不变，
+// 而文字宽度会随缩放变小，所以文字会自动更靠近光柱。
+const BEACON_LABEL_OFFSET_X = 20
+// 文字随缩放的补偿强度：1 = 屏幕尺寸基本不变，0 = 不补偿（正常透视缩放）
+const BEACON_LABEL_ZOOM_COMPENSATION = 1
+// 文字尺寸的参考距离：固定常量，与 CAMERA_START_DISTANCE 无关。
+// 它只定义"标准大小"对应的距离（此时文字世界高度 = BEACON_LABEL_HEIGHT）；
+// 因此调整 CAMERA_START_DISTANCE 时，同一 distance 下的文字大小保持不变。
+const BEACON_LABEL_REFERENCE_DISTANCE = 1800
+// —— 点击光柱后的聚焦视角 ——
+const BEACON_FOCUS_DISTANCE = 400 // 近距离观察时的相机距离
+const BEACON_FOCUS_ELEVATION_DEG = 25 // 聚焦时的高度角
+const BEACON_FOCUS_TARGET_HEIGHT = 120 // 注视点在光柱底部之上的高度（看向光柱中部）
+const BEACON_FOCUS_SHIFT_RATIO = 0.22 // 光柱在画面上偏左的量（占可见宽度的比例）
+const BEACON_FOCUS_EASE = 6 // 聚焦/退出过渡速度（越大越快）
+// 聚焦目标自身的跟随速度：换一根光柱时，相机是"滑"过去的，不会瞬移。
+// 比 BEACON_FOCUS_EASE 慢一点，切换过程才看得出来。
+const BEACON_FOCUS_FOLLOW_EASE = 3.5
+// 聚焦时其它光柱熄灭 / 目标光柱点亮的速度（与相机滑动同步，避免亮度、长度突然变化）
+const BEACON_DIM_EASE = 3.5
+const BEACON_FOCUS_ELEVATION = THREE.MathUtils.degToRad(BEACON_FOCUS_ELEVATION_DEG)
+
+// 辉光（Bloom）：强度 / 半径 / 阈值（阈值越高，只有越亮的东西发光）
+const BLOOM_STRENGTH = 0.7
+const BLOOM_RADIUS = 0.5
+const BLOOM_THRESHOLD = 0.85
+// -----------------------------------------------------------------------
+
+const containerRef = ref<HTMLDivElement | null>(null)
+
+let renderer: THREE.WebGLRenderer | null = null
+let scene: THREE.Scene | null = null
+// 标注文字单独一个场景，在后期(Bloom)之后绘制，保证不受光照/辉光影响、始终清晰
+let labelScene: THREE.Scene | null = null
+let camera: THREE.PerspectiveCamera | null = null
+let composer: EffectComposer | null = null
+let resizeObserver: ResizeObserver | null = null
+// 尺寸变化：移动端浏览器地址栏收起/展开会让容器高度连续变化，
+// 每次变化都立刻 setSize 会让画面闪一下，所以合并成一次，
+// 并且尺寸没实际变化（只是抖动）时干脆不动画面。
+const RESIZE_DEBOUNCE_MS = 180
+let resizeTimer = 0
+let appliedWidth = 0
+let appliedHeight = 0
+let animationId = 0
+let canvasEl: HTMLCanvasElement | null = null
+
+// 模型（拖拽时移动它）
+let model: THREE.Object3D | null = null
+let modelCenter = new THREE.Vector3()
+let modelBaseY = 0
+let modelSize = new THREE.Vector3()
+// 地面：网格（中心向外淡出）+ 等高线（从网格消失处向外显现），两者同时显示、跟随模型移动
+let groundGrid: THREE.LineSegments | null = null
+let groundContour: THREE.LineSegments | null = null
+let gridHalfSpan = 0
+let contourHalfSpan = 0
+// 已加载、但还没摆到地面的等高线模型
+let contourRoot: THREE.Object3D | null = null
+const beaconClock = new THREE.Clock()
+// 信标运行时状态（用于悬停高亮、随缩放调整文字等）
+interface BeaconRuntime {
+  config: BeaconConfig
+  root: THREE.Group
+  pillar: THREE.Mesh
+  core: THREE.Mesh
+  pillarMaterial: THREE.ShaderMaterial
+  coreMaterial: THREE.ShaderMaterial
+  particleMaterial: THREE.ShaderMaterial
+  rippleMaterial: THREE.ShaderMaterial
+  label: THREE.Sprite | null
+  hover: number // 0 = 常态, 1 = 完全悬停（带缓动）
+  dim: number // 0 = 正常, 1 = 熄灭（其他光柱在聚焦时熄灭，带缓动）
+  ripplePhase: number // 累加的波纹相位（避免改变速度时相位跳变）
+  rayDistance: number // 本帧鼠标射线到光柱轴线的距离（用于悬停迟滞）
+}
+const beaconRuntimes: BeaconRuntime[] = []
+const beaconLabels: THREE.Sprite[] = []
+let beaconGroup: THREE.Group | null = null
+// 鼠标悬停用的射线与指针位置（NDC）
+const pointerNdc = new THREE.Vector2(-2, -2)
+const raycaster = new THREE.Raycaster()
+const _beaconBase = new THREE.Vector3()
+let beaconElapsed = 0
+// 悬停 / 点击 / 聚焦状态
+let currentHovered: BeaconRuntime | null = null
+let pressedBeacon: BeaconRuntime | null = null
+let pressConsumed = false
+let focusedIndex = -1
+let focusAmount = 0
+// 当前实际使用的相机距离（聚焦时会偏离用户缩放的 distance）
+let effectiveDistance = CAMERA_START_DISTANCE
+
+// 相机轨道状态：相机始终看向原点，位置由 水平角(罗盘朝向) + 高度角 + 距离 决定
+let bearing = THREE.MathUtils.degToRad(CAMERA_BEARING_DEG)
+let distance = CAMERA_START_DISTANCE
+
+// 视角微动状态：目标值 -1~1（PC 来自鼠标位置，移动端来自陀螺仪），当前值逐帧平滑跟随
+let lookDriftTargetX = 0
+let lookDriftTargetY = 0
+let lookDriftX = 0
+let lookDriftY = 0
+// 陀螺仪：首次收到的姿态作为"初始值"，之后都相对它偏移；gyroAttached 防止重复挂载
+let gyroBase: { beta: number; gamma: number } | null = null
+let gyroAttached = false
+let gyroRequested = false
+
+const WORLD_UP = new THREE.Vector3(0, 1, 0)
+const _right = new THREE.Vector3()
+const _lookDir = new THREE.Vector3()
+const _camTarget = new THREE.Vector3()
+const _focusBase = new THREE.Vector3()
+const _focusTarget = new THREE.Vector3()
+const _focusRight = new THREE.Vector3()
+const _pickNdc = new THREE.Vector2()
+// 地面渐变中心（世界坐标 xz）的临时向量，避免每帧新建对象
+const _fadeCenter2 = new THREE.Vector2()
+// 退出聚焦时用于平滑回到常态（记住上一次的聚焦目标）
+// 平滑跟随的聚焦状态：切换聚焦对象时从"当前值"继续缓动，不直接采用目标值
+const _focusTargetSmooth = new THREE.Vector3(CAMERA_TARGET.x, CAMERA_TARGET.y, CAMERA_TARGET.z)
+let focusDistanceSmooth = CAMERA_START_DISTANCE
+let focusElevationSmooth = THREE.MathUtils.degToRad(CAMERA_MAX_ELEVATION_DEG)
+// 射线-线段最近距离计算的临时变量
+const _segStart = new THREE.Vector3()
+const _segEnd = new THREE.Vector3()
+const _segDir = new THREE.Vector3()
+const _rayToSegStart = new THREE.Vector3()
+const _closestOnRay = new THREE.Vector3()
+const _closestOnSeg = new THREE.Vector3()
+
+/** 缩放(距离) -> 高度角：距离最大(缩小)时 80°，距离最小(放大)时 30°，中间线性 */
+function elevationForDistance(value: number) {
+  const t = THREE.MathUtils.clamp(
+    (value - CAMERA_MIN_DISTANCE) / (CAMERA_MAX_DISTANCE - CAMERA_MIN_DISTANCE),
+    0,
+    1,
+  )
+  const deg = THREE.MathUtils.lerp(CAMERA_MIN_ELEVATION_DEG, CAMERA_MAX_ELEVATION_DEG, t)
+  return THREE.MathUtils.degToRad(deg)
+}
+
+/** 缩放(距离) -> 地面渐变"结束半径"比例：缩到最小(相机最远)=MIN，放到最大(相机最近)=MAX，中间线性 */
+function fadeEndRatioForDistance(value: number) {
+  const t = THREE.MathUtils.clamp(
+    (value - CAMERA_MIN_DISTANCE) / (CAMERA_MAX_DISTANCE - CAMERA_MIN_DISTANCE),
+    0,
+    1,
+  )
+  return THREE.MathUtils.lerp(GRID_FADE_END_RATIO_MAX, GRID_FADE_END_RATIO_MIN, t)
+}
+
+/**
+ * 等高线"远处淡出"的范围：
+ * 既保留在自身边缘的淡出（CONTOUR_FADE_START/END_RATIO），
+ * 又保证完全消失的半径不超过网格完全消失半径的 CONTOUR_FADE_MAX_RATIO 倍。
+ * 两者取更靠内的一档；被上限"压"下来时整体等比缩小，淡出的形状（曲线）保持不变。
+ */
+function contourFarFadeRange(gridFadeEnd: number) {
+  const ownStart = contourHalfSpan * CONTOUR_FADE_START_RATIO
+  const ownEnd = Math.max(contourHalfSpan * CONTOUR_FADE_END_RATIO, ownStart + 1e-4)
+  const maxEnd = Math.max(gridFadeEnd * CONTOUR_FADE_MAX_RATIO, 1e-4)
+  // 超过上限时整体等比缩小：保证"完全消失半径 ≤ 1.5 × 网格消失半径"，同时保留淡出形状
+  const k = Math.min(1, maxEnd / ownEnd)
+  return { start: ownStart * k, end: ownEnd * k }
+}
+
+/**
+ * 把当前缩放对应的地面渐变范围写进着色器：
+ * 网格从中心向外淡出到 fadeEnd；等高线则从该 fadeEnd 处开始向外淡入。
+ * 等高线自己的远处淡出范围随缩放变化（因为网格消失半径随缩放变化），见 contourFarFadeRange。
+ */
+function updateGroundFadeRange(value: number) {
+  const fadeStart = gridHalfSpan * GRID_FADE_START_RATIO
+  const fadeEnd = Math.max(gridHalfSpan * fadeEndRatioForDistance(value), fadeStart + 1e-4)
+
+  if (groundGrid) {
+    const material = groundGrid.material as THREE.ShaderMaterial
+    material.uniforms.uFadeStart.value = fadeStart
+    material.uniforms.uFadeEnd.value = fadeEnd
+  }
+  if (groundContour) {
+    const material = groundContour.material as THREE.ShaderMaterial
+    // 从网格完全消失的半径开始，在过渡带内逐渐显现
+    const riseStart = fadeEnd * CONTOUR_TAKEOVER_RATIO
+    material.uniforms.uRiseStart.value = riseStart
+    material.uniforms.uRiseEnd.value = Math.max(
+      riseStart + contourHalfSpan * CONTOUR_RISE_RATIO,
+      riseStart + 1e-4,
+    )
+    // 远处淡出：保留自身边缘的淡出，同时保证完全消失半径不超过网格消失半径的 1.5 倍
+    const far = contourFarFadeRange(fadeEnd)
+    material.uniforms.uFadeStart.value = far.start
+    material.uniforms.uFadeEnd.value = far.end
+  }
+}
+
+/** 地面渐变中心跟随相机注视点（网格与等高线共用） */
+function updateGroundFadeCenter(target: THREE.Vector3) {
+  _fadeCenter2.set(target.x, target.z)
+  if (groundGrid) {
+    (groundGrid.material as THREE.ShaderMaterial).uniforms.uFadeCenter.value.copy(_fadeCenter2)
+  }
+  if (groundContour) {
+    (groundContour.material as THREE.ShaderMaterial).uniforms.uFadeCenter.value.copy(_fadeCenter2)
+  }
+}
+
+/**
+ * 每帧更新相机。常态下看向 CAMERA_TARGET(原点)；
+ * 聚焦某根光柱时，注视点平移到该光柱"右侧"一点，使光柱落在画面左侧，并拉近距离。
+ */
+function updateCameraFrame(delta: number) {
+  if (!camera) return
+
+  const focused = focusedIndex >= 0 ? beaconRuntimes[focusedIndex] ?? null : null
+  const focusTargetAmount = focused ? 1 : 0
+  focusAmount += (focusTargetAmount - focusAmount) * (1 - Math.exp(-BEACON_FOCUS_EASE * delta))
+  if (!focused && focusAmount < 1e-4) focusAmount = 0
+
+  const baseElevation = elevationForDistance(distance)
+  let frameDistance = distance
+  let frameElevation = baseElevation
+  _camTarget.copy(CAMERA_TARGET)
+
+  const lookX = Math.sin(bearing)
+  const lookZ = -Math.cos(bearing)
+  _lookDir.set(lookX, 0, lookZ)
+
+  if (focused && focusAmount > 0) {
+    focused.root.getWorldPosition(_focusBase)
+    _focusRight.crossVectors(_lookDir, WORLD_UP).normalize()
+    const visibleHeight =
+      2 * BEACON_FOCUS_DISTANCE * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))
+    const visibleWidth = visibleHeight * (camera.aspect || 1)
+    _focusTarget.copy(_focusBase)
+    _focusTarget.y += BEACON_FOCUS_TARGET_HEIGHT
+    // 注视点向相机右方向偏移 -> 光柱出现在画面左侧
+    _focusTarget.addScaledVector(_focusRight, visibleWidth * BEACON_FOCUS_SHIFT_RATIO)
+
+    // 关键：不直接采用上面算出来的目标，而是每帧朝它缓动。
+    // 否则 focusAmount 已经是 1，换一根光柱就会让相机瞬间跳过去。
+    const follow = 1 - Math.exp(-BEACON_FOCUS_FOLLOW_EASE * delta)
+    _focusTargetSmooth.lerp(_focusTarget, follow)
+    focusDistanceSmooth += (BEACON_FOCUS_DISTANCE - focusDistanceSmooth) * follow
+    focusElevationSmooth += (BEACON_FOCUS_ELEVATION - focusElevationSmooth) * follow
+  }
+
+  if (focusAmount > 0) {
+    _camTarget.lerp(_focusTargetSmooth, focusAmount)
+    frameDistance = THREE.MathUtils.lerp(distance, focusDistanceSmooth, focusAmount)
+    frameElevation = THREE.MathUtils.lerp(baseElevation, focusElevationSmooth, focusAmount)
+  }
+
+  effectiveDistance = frameDistance
+
+  // —— 视角微动：只做"叠加" ——
+  // 上面算出来的聚焦 / 缓动结果一个都不改，这里只是把微小的偏移加在最后：
+  // 先让当前值平滑跟随目标值（鼠标位置或陀螺仪倾角），再微转相机、微移注视点。
+  // 所以晃动鼠标 / 手机不会和据点切换动画打架。
+  const lookEase = 1 - Math.exp(-LOOK_EASE * delta)
+  lookDriftX += (lookDriftTargetX - lookDriftX) * lookEase
+  lookDriftY += (lookDriftTargetY - lookDriftY) * lookEase
+
+  const driftYaw = lookDriftX * LOOK_YAW_RANGE
+  const driftPitch = lookDriftY * LOOK_PITCH_RANGE
+  const driftDirX = Math.sin(bearing + driftYaw)
+  const driftDirZ = -Math.cos(bearing + driftYaw)
+
+  // 注视点也轻微平移一点（视差）：左右明显、上下更弱
+  _right.set(Math.cos(bearing + driftYaw), 0, Math.sin(bearing + driftYaw))
+  _camTarget.addScaledVector(_right, frameDistance * LOOK_SHIFT_RATIO * lookDriftX)
+  _camTarget.y += frameDistance * LOOK_SHIFT_RATIO * 0.5 * lookDriftY
+
+  const driftElevation = frameElevation + driftPitch
+  const horizontal = frameDistance * Math.cos(driftElevation)
+  camera.position.set(
+    _camTarget.x - horizontal * driftDirX,
+    _camTarget.y + frameDistance * Math.sin(driftElevation),
+    _camTarget.z - horizontal * driftDirZ,
+  )
+  camera.up.copy(WORLD_UP)
+  camera.lookAt(_camTarget)
+  camera.updateMatrixWorld()
+  updateGroundFadeRange(frameDistance)
+  updateGroundFadeCenter(_camTarget)
+}
+
+/**
+ * PC：鼠标相对画面中心的位置 → 微动目标值（-1~1）。
+ * 只记录目标值，真正的移动量在 updateCameraFrame 里平滑跟随 + 叠加。
+ */
+function updateLookFromPointer(clientX: number, clientY: number) {
+  const rect = canvasEl?.getBoundingClientRect()
+  if (!rect || rect.width === 0 || rect.height === 0) return
+  const nx = ((clientX - rect.left) / rect.width) * 2 - 1
+  const ny = ((clientY - rect.top) / rect.height) * 2 - 1
+  lookDriftTargetX = THREE.MathUtils.clamp(nx, -1, 1)
+  lookDriftTargetY = THREE.MathUtils.clamp(ny, -1, 1)
+}
+
+/** 陀螺仪倾角 → 微动目标值：死区外线性放大，到 LOOK_GYRO_RANGE_DEG 时到满量 */
+function gyroToDrift(value: number) {
+  const magnitude = Math.abs(value) - LOOK_GYRO_DEAD_ZONE_DEG
+  if (magnitude <= 0) return 0
+  const span = Math.max(LOOK_GYRO_RANGE_DEG - LOOK_GYRO_DEAD_ZONE_DEG, 1e-3)
+  return Math.sign(value) * Math.min(magnitude / span, 1)
+}
+
+/**
+ * 陀螺仪：相对"首次姿态"的倾角决定微动方向。
+ * beta 是前后俯仰、gamma 是左右侧倾；横屏时设备转了 90°，两者对调。
+ */
+function onDeviceOrientation(event: DeviceOrientationEvent) {
+  const beta = event.beta
+  const gamma = event.gamma
+  if (beta === null || gamma === null) return
+  if (!gyroBase) gyroBase = { beta, gamma }
+
+  const landscape = window.innerWidth >= window.innerHeight
+  const lateral = landscape ? beta - gyroBase.beta : gamma - gyroBase.gamma
+  const vertical = landscape ? gamma - gyroBase.gamma : beta - gyroBase.beta
+
+  lookDriftTargetX = gyroToDrift(lateral) * LOOK_GYRO_SIGN_X
+  lookDriftTargetY = gyroToDrift(vertical) * LOOK_GYRO_SIGN_Y
+}
+
+function attachGyro() {
+  if (gyroAttached) return
+  gyroAttached = true
+  gyroBase = null
+  window.addEventListener('deviceorientation', onDeviceOrientation)
+}
+
+/**
+ * 申请 / 挂载陀螺仪。
+ * iOS 13+ 必须在用户手势（这里是按到画布上）里调用 requestPermission，
+ * 所以桌面端和没有权限接口的浏览器直接挂载，iOS 等第一次触摸。
+ */
+function requestGyro(fromTouch: boolean) {
+  if (gyroAttached) return
+  if (typeof window === 'undefined' || typeof DeviceOrientationEvent === 'undefined') return
+
+  const ctor = DeviceOrientationEvent as typeof DeviceOrientationEvent & {
+    requestPermission?: () => Promise<'granted' | 'denied'>
+  }
+  if (typeof ctor.requestPermission !== 'function') {
+    attachGyro()
+    return
+  }
+  // 只弹一次系统权限框；用户拒绝后不再反复请求
+  if (!fromTouch || gyroRequested) return
+  gyroRequested = true
+
+  ctor
+    .requestPermission()
+    .then((state) => {
+      if (state === 'granted') attachGyro()
+    })
+    .catch(() => undefined)
+}
+
+function materialNames(mesh: THREE.Mesh): string[] {
+  const material = mesh.material
+  const list = Array.isArray(material) ? material : [material]
+  return list.filter(Boolean).map((item) => item.name ?? '')
+}
+
+/**
+ * 遍历模型，按材质名把楼块刷白、把水体改成不刺眼的深蓝水面。
+ * 该 glb 的材质命名：wall / roof 为楼块，water 为水体。
+ */
+function styleMaterials(root: THREE.Object3D) {
+  const processed = new Set<THREE.Material>()
+
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh
+    if (!mesh.isMesh || !mesh.material) return
+
+    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+    for (const material of materials) {
+      if (!material || processed.has(material)) continue
+      processed.add(material)
+
+      const standard = material as THREE.MeshStandardMaterial
+      const name = material.name
+
+      if (name === 'wall' || name === 'roof') {
+        // 楼块：纯白
+        standard.color?.set(BUILDING_COLOR)
+        standard.emissive?.set(0x000000)
+        standard.roughness = 0.9
+        if ('metalness' in standard) standard.metalness = 0.0
+      } else if (name === 'water') {
+        // 水面：深蓝、粗糙，仅保留极弱的自发光，避免出现刺眼高光
+        standard.color?.set(WATER_SURFACE_COLOR)
+        standard.emissive = new THREE.Color(WATER_EMISSIVE)
+        standard.emissiveIntensity = WATER_EMISSIVE_INTENSITY
+        standard.roughness = WATER_ROUGHNESS
+        if ('metalness' in standard) standard.metalness = 0.0
+      }
+    }
+  })
+}
+
+/**
+ * 提取水体几何体的边界边，并在轮廓外侧生成一圈深蓝色光晕（带宽度的渐变光带）。
+ * 光晕几何体使用水体自身的局部坐标，因此作为水体的子节点即可自动对齐。
+ */
+function buildWaterGlow(
+  geometry: THREE.BufferGeometry,
+  width: number,
+  yLift: number,
+): THREE.Group | null {
+  const position = geometry.getAttribute('position') as THREE.BufferAttribute | undefined
+  if (!position) return null
+
+  const index = geometry.getIndex()
+  const vertexCount = position.count
+  const triCount = Math.floor((index ? index.count : vertexCount) / 3)
+  if (triCount === 0) return null
+
+  const idxAt = (i: number) => (index ? index.getX(i) : i)
+
+  // 按顶点坐标"焊接"重复顶点，这样无论几何体是否 indexed 都能正确找出边界边
+  const weldId = new Int32Array(vertexCount)
+  const idByPosition = new Map<string, number>()
+  let nextId = 0
+  for (let i = 0; i < vertexCount; i++) {
+    const key = `${position.getX(i)}|${position.getY(i)}|${position.getZ(i)}`
+    let id = idByPosition.get(key)
+    if (id === undefined) {
+      id = nextId++
+      idByPosition.set(key, id)
+    }
+    weldId[i] = id
+  }
+
+  const edgeKey = (a: number, b: number) =>
+    a < b ? `${weldId[a]}_${weldId[b]}` : `${weldId[b]}_${weldId[a]}`
+
+  // 第一遍：统计每条边被多少个三角形使用，只被用一次的即为边界边
+  const counts = new Map<string, number>()
+  for (let t = 0; t < triCount; t++) {
+    const i0 = idxAt(t * 3)
+    const i1 = idxAt(t * 3 + 1)
+    const i2 = idxAt(t * 3 + 2)
+    const edges: Array<[number, number]> = [
+      [i0, i1],
+      [i1, i2],
+      [i2, i0],
+    ]
+    for (const [a, b] of edges) {
+      const key = edgeKey(a, b)
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+  }
+
+  const bandPositions: number[] = []
+  const bandT: number[] = []
+  const contourPositions: number[] = []
+
+  const a = new THREE.Vector3()
+  const b = new THREE.Vector3()
+  const c = new THREE.Vector3()
+  const ab = new THREE.Vector3()
+  const ac = new THREE.Vector3()
+  const normal = new THREE.Vector3()
+  const dir = new THREE.Vector3()
+  const outward = new THREE.Vector3()
+  const outerA = new THREE.Vector3()
+  const outerB = new THREE.Vector3()
+
+  // 第二遍：对每条边界边，在其外侧（沿面法线判断，兼容任意环绕方向）铺一条渐变光带
+  for (let t = 0; t < triCount; t++) {
+    const i0 = idxAt(t * 3)
+    const i1 = idxAt(t * 3 + 1)
+    const i2 = idxAt(t * 3 + 2)
+
+    a.fromBufferAttribute(position, i0)
+    b.fromBufferAttribute(position, i1)
+    c.fromBufferAttribute(position, i2)
+    ab.subVectors(b, a)
+    ac.subVectors(c, a)
+    normal.crossVectors(ab, ac)
+    if (normal.lengthSq() < 1e-12) continue
+    normal.normalize()
+
+    const edges: Array<[number, number]> = [
+      [i0, i1],
+      [i1, i2],
+      [i2, i0],
+    ]
+
+    for (const [ea, eb] of edges) {
+      if ((counts.get(edgeKey(ea, eb)) ?? 0) !== 1) continue
+
+      a.fromBufferAttribute(position, ea)
+      b.fromBufferAttribute(position, eb)
+      dir.subVectors(b, a)
+
+      // 外侧方向 = 边方向 × 面法线，投影到水平面
+      outward.crossVectors(dir, normal)
+      outward.y = 0
+      if (outward.lengthSq() < 1e-12) continue
+      outward.normalize()
+
+      const aY = a.y + yLift
+      const bY = b.y + yLift
+      outerA.copy(a).addScaledVector(outward, width)
+      outerB.copy(b).addScaledVector(outward, width)
+      outerA.y = aY
+      outerB.y = bY
+
+      // 光带：内圈（aT=0，亮）-> 外圈（aT=1，淡）
+      bandPositions.push(
+        a.x, aY, a.z,
+        b.x, bY, b.z,
+        outerB.x, outerB.y, outerB.z,
+        a.x, aY, a.z,
+        outerB.x, outerB.y, outerB.z,
+        outerA.x, outerA.y, outerA.z,
+      )
+      bandT.push(0, 0, 1, 0, 1, 1)
+
+      // 贴边的细轮廓线
+      contourPositions.push(a.x, aY, a.z, b.x, bY, b.z)
+    }
+  }
+
+  if (bandPositions.length === 0) return null
+
+  const group = new THREE.Group()
+  group.name = 'water-glow'
+
+  const bandGeometry = new THREE.BufferGeometry()
+  bandGeometry.setAttribute('position', new THREE.Float32BufferAttribute(bandPositions, 3))
+  bandGeometry.setAttribute('aT', new THREE.Float32BufferAttribute(bandT, 1))
+
+  const bandMaterial = new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: new THREE.Color(HALO_COLOR) },
+      uIntensity: { value: HALO_INTENSITY },
+      uFalloff: { value: HALO_FALLOFF },
+    },
+    vertexShader: /* glsl */ `
+      attribute float aT;
+      varying float vT;
+      void main() {
+        vT = aT;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uColor;
+      uniform float uIntensity;
+      uniform float uFalloff;
+      varying float vT;
+      void main() {
+        float alpha = pow(clamp(1.0 - vT, 0.0, 1.0), uFalloff) * uIntensity;
+        gl_FragColor = vec4(uColor, alpha);
+      }
+    `,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  })
+
+  const band = new THREE.Mesh(bandGeometry, bandMaterial)
+  band.name = 'water-halo-band'
+  band.renderOrder = 2
+  group.add(band)
+
+  const contourGeometry = new THREE.BufferGeometry()
+  contourGeometry.setAttribute(
+    'position',
+    new THREE.Float32BufferAttribute(contourPositions, 3),
+  )
+  const contourMaterial = new THREE.LineBasicMaterial({
+    color: CONTOUR_COLOR,
+    transparent: true,
+    opacity: CONTOUR_OPACITY,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  })
+  const contour = new THREE.LineSegments(contourGeometry, contourMaterial)
+  contour.name = 'water-halo-contour'
+  contour.renderOrder = 3
+  group.add(contour)
+
+  return group
+}
+
+function addWaterGlow(root: THREE.Object3D, modelSize: THREE.Vector3) {
+  const width = (Math.max(modelSize.x, modelSize.z) || 1) * HALO_WIDTH_RATIO
+  const yLift = Math.max(modelSize.y, 1) * 0.01
+
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh
+    if (!mesh.isMesh || !mesh.geometry) return
+    if (!materialNames(mesh).includes('water')) return
+
+    const glow = buildWaterGlow(mesh.geometry, width, yLift)
+    if (glow) mesh.add(glow)
+  })
+}
+
+/** 光柱材质：沿高度向上渐隐，颜色乘 uIntensity 进入 HDR 以获得 Bloom 辉光 */
+function createBeaconPillarMaterial(opacity: number) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: new THREE.Color(BEACON_COLOR) },
+      uHeight: { value: BEACON_HEIGHT },
+      uOpacity: { value: opacity },
+      uIntensity: { value: BEACON_INTENSITY },
+    },
+    vertexShader: /* glsl */ `
+      uniform float uHeight;
+      varying float vH;
+      void main() {
+        vH = (position.y + uHeight * 0.5) / uHeight; // 0 = 底部, 1 = 顶部
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uColor;
+      uniform float uOpacity;
+      uniform float uIntensity;
+      varying float vH;
+      void main() {
+        float fade = pow(1.0 - clamp(vH, 0.0, 1.0), 1.6);
+        gl_FragColor = vec4(uColor * uIntensity, fade * uOpacity);
+      }
+    `,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  })
+}
+
+/** 用 canvas 画黄色文字，做成始终朝向相机的 Sprite 标注 */
+function createBeaconLabel(text: string) {
+  const fontSize = 72
+  const padding = 28
+  const font = `bold ${fontSize}px "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif`
+
+  const measureCanvas = document.createElement('canvas')
+  const measureCtx = measureCanvas.getContext('2d')
+  if (!measureCtx) return null
+  measureCtx.font = font
+  const textWidth = Math.ceil(measureCtx.measureText(text).width)
+
+  const canvas = document.createElement('canvas')
+  canvas.width = textWidth + padding * 2
+  canvas.height = fontSize + padding * 2
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+
+  ctx.font = font
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.lineJoin = 'round'
+  ctx.lineWidth = 8
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)'
+  ctx.strokeText(text, canvas.width / 2, canvas.height / 2)
+  ctx.shadowColor = BEACON_LABEL_COLOR
+  ctx.shadowBlur = 18
+  ctx.fillStyle = BEACON_LABEL_COLOR
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2)
+
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
+  texture.anisotropy = 4
+
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthWrite: false,
+    depthTest: false, // 文字单独在后期之后绘制，始终在最上层
+    toneMapped: false, // 不受色调映射影响，颜色保持原样
+  })
+
+  const sprite = new THREE.Sprite(material)
+  const aspect = canvas.width / canvas.height
+  const baseWidth = BEACON_LABEL_HEIGHT * aspect
+  const baseHeight = BEACON_LABEL_HEIGHT
+  sprite.userData.baseWidth = baseWidth
+  sprite.userData.baseHeight = baseHeight
+  sprite.scale.set(baseWidth, baseHeight, 1)
+  return sprite
+}
+
+/** 上升粒子材质（所有信标共用，逐粒子随机由几何属性提供） */
+function createBeaconParticleMaterial() {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 },
+      uViewportHeight: { value: 1 },
+      uColor: { value: new THREE.Color(BEACON_COLOR) },
+      uIntensity: { value: BEACON_INTENSITY },
+      uOpacity: { value: BEACON_PARTICLE_OPACITY },
+    },
+    vertexShader: /* glsl */ `
+      uniform float uTime;
+      uniform float uViewportHeight;
+      attribute float aPhase;
+      attribute float aSpeed;
+      attribute float aTravel;
+      attribute float aSize;
+      varying float vAlpha;
+      void main() {
+        // 以随机相位在 0~1 之间循环，progress 越大升得越高
+        float progress = fract(aPhase + uTime * aSpeed / max(aTravel, 1e-3));
+        vec3 p = vec3(position.x, progress * aTravel, position.z);
+        vec4 mvPosition = modelViewMatrix * vec4(p, 1.0);
+        gl_Position = projectionMatrix * mvPosition;
+        // 透视缩放：世界尺寸 -> 屏幕像素
+        gl_PointSize = aSize * projectionMatrix[1][1] * uViewportHeight * 0.5 / max(-mvPosition.z, 1.0);
+        vAlpha = pow(1.0 - progress, 1.5); // 越往上越暗，最终消失
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uColor;
+      uniform float uIntensity;
+      uniform float uOpacity;
+      varying float vAlpha;
+      void main() {
+        vec2 uv = gl_PointCoord - 0.5;
+        float d = length(uv);
+        if (d > 0.5) discard;
+        float a = (1.0 - smoothstep(0.0, 0.5, d)) * vAlpha * uOpacity;
+        if (a <= 0.001) discard;
+        gl_FragColor = vec4(uColor * uIntensity, a);
+      }
+    `,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  })
+}
+
+/** 一束上升粒子：位置存于 position.xz，y 由着色器随进度上升 */
+function createBeaconParticles() {
+  const count = BEACON_PARTICLE_COUNT
+  const positions = new Float32Array(count * 3)
+  const phases = new Float32Array(count)
+  const speeds = new Float32Array(count)
+  const travels = new Float32Array(count)
+  const sizes = new Float32Array(count)
+
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2
+    const radius = Math.sqrt(Math.random()) * BEACON_PARTICLE_RADIUS
+    positions[i * 3] = Math.cos(angle) * radius
+    positions[i * 3 + 1] = 0
+    positions[i * 3 + 2] = Math.sin(angle) * radius
+    phases[i] = Math.random()
+    speeds[i] = THREE.MathUtils.lerp(
+      BEACON_PARTICLE_SPEED_MIN,
+      BEACON_PARTICLE_SPEED_MAX,
+      Math.random(),
+    )
+    travels[i] =
+      BEACON_HEIGHT *
+      THREE.MathUtils.lerp(BEACON_PARTICLE_HEIGHT_MIN, BEACON_PARTICLE_HEIGHT_MAX, Math.random())
+    sizes[i] = BEACON_PARTICLE_SIZE * (0.6 + Math.random() * 0.8)
+  }
+
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  geometry.setAttribute('aPhase', new THREE.BufferAttribute(phases, 1))
+  geometry.setAttribute('aSpeed', new THREE.BufferAttribute(speeds, 1))
+  geometry.setAttribute('aTravel', new THREE.BufferAttribute(travels, 1))
+  geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1))
+
+  // 每根光柱一份粒子材质，便于单独淡入淡出（熄灭）
+  const points = new THREE.Points(geometry, createBeaconParticleMaterial())
+  points.frustumCulled = false // 粒子会升到几何包围盒之外
+  return points
+}
+
+/** 底部波纹材质（所有信标共用；环数通过宏注入，因为 GLSL 循环需要常量上界） */
+function createBeaconRippleMaterial() {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      // 累加相位：每帧 += 速度 * dt，速度变化时相位连续，不会跳变
+      uPhase: { value: 0 },
+      uColor: { value: new THREE.Color(BEACON_COLOR) },
+      uIntensity: { value: BEACON_INTENSITY },
+      uOpacity: { value: BEACON_RIPPLE_OPACITY },
+      uThickness: { value: BEACON_RIPPLE_THICKNESS },
+    },
+    vertexShader: /* glsl */ `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      #define RING_COUNT ${BEACON_RIPPLE_COUNT}
+      uniform float uPhase;
+      uniform vec3 uColor;
+      uniform float uIntensity;
+      uniform float uOpacity;
+      uniform float uThickness;
+      varying vec2 vUv;
+      void main() {
+        float r = length(vUv - 0.5) * 2.0; // 0 = 中心, 1 = 边缘
+        if (r > 1.0) discard;
+        float ripple = 0.0;
+        for (int i = 0; i < RING_COUNT; i++) {
+          float phase = fract(uPhase + float(i) / float(RING_COUNT));
+          float ringR = phase; // 环半径由 0 向外扩散到 1
+          float ring = 1.0 - smoothstep(0.0, uThickness, abs(r - ringR));
+          ripple += ring * (1.0 - phase); // 越往外越淡
+        }
+        float alpha = clamp(ripple, 0.0, 1.0) * uOpacity;
+        alpha *= 1.0 - smoothstep(0.85, 1.0, r); // 外缘柔化
+        if (alpha <= 0.001) discard;
+        gl_FragColor = vec4(uColor * uIntensity, alpha);
+      }
+    `,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  })
+}
+
+/** 生成一根信标（底部在 group 原点）：光柱 + 内芯 + 上升粒子 + 底部波纹 + 文字标注 */
+function createBeacon(config: BeaconConfig): BeaconRuntime {
+  const root = new THREE.Group()
+
+  const pillarMaterial = createBeaconPillarMaterial(BEACON_OPACITY)
+  const pillar = new THREE.Mesh(
+    new THREE.CylinderGeometry(BEACON_RADIUS, BEACON_RADIUS, BEACON_HEIGHT, 24, 1, true),
+    pillarMaterial,
+  )
+  pillar.position.y = BEACON_HEIGHT / 2
+  root.add(pillar)
+
+  const coreMaterial = createBeaconPillarMaterial(BEACON_CORE_OPACITY)
+  const core = new THREE.Mesh(
+    new THREE.CylinderGeometry(BEACON_CORE_RADIUS, BEACON_CORE_RADIUS, BEACON_HEIGHT, 16, 1, true),
+    coreMaterial,
+  )
+  core.position.y = BEACON_HEIGHT / 2
+  root.add(core)
+
+  const particles = createBeaconParticles()
+  root.add(particles)
+  const particleMaterial = particles.material as THREE.ShaderMaterial
+
+  const rippleMaterial = createBeaconRippleMaterial()
+  const ripple = new THREE.Mesh(
+    new THREE.CircleGeometry(BEACON_RIPPLE_RADIUS, 48),
+    rippleMaterial,
+  )
+  ripple.rotation.x = -Math.PI / 2
+  ripple.position.y = BEACON_RIPPLE_LIFT
+  root.add(ripple)
+
+  const sprite = createBeaconLabel(config.label)
+  if (sprite) {
+    // 文字放到独立场景（世界坐标，每帧跟随信标），不随光柱受光照/Bloom 影响
+    labelScene?.add(sprite)
+    beaconLabels.push(sprite)
+  }
+
+  const record: BeaconRuntime = {
+    config,
+    root,
+    pillar,
+    core,
+    pillarMaterial,
+    coreMaterial,
+    particleMaterial,
+    rippleMaterial,
+    label: sprite,
+    hover: 0,
+    dim: 0,
+    ripplePhase: 0,
+    rayDistance: Infinity,
+  }
+  beaconRuntimes.push(record)
+  return record
+}
+
+/**
+ * 射线(origin->direction, t>=0) 到线段(p0->p1, s∈[0,1]) 的最短距离。
+ * 直接解最近点（几何法），不用沿轴线采样——采样会随悬停时的高度变化而变，导致抖动。
+ */
+function distanceRayToSegment(
+  origin: THREE.Vector3,
+  direction: THREE.Vector3,
+  p0: THREE.Vector3,
+  p1: THREE.Vector3,
+): number {
+  const d2 = _segDir.subVectors(p1, p0)
+  const r = _rayToSegStart.subVectors(origin, p0)
+  const e = d2.dot(d2)
+
+  if (e < 1e-9) {
+    // 退化成点：求该点到射线的距离
+    const s = Math.max(-r.dot(direction), 0)
+    _closestOnRay.copy(origin).addScaledVector(direction, s)
+    return _closestOnRay.distanceTo(p0)
+  }
+
+  const a = 1 // direction 已归一化
+  const b = direction.dot(d2)
+  const c = direction.dot(r)
+  const f = d2.dot(r)
+  const denom = a * e - b * b
+
+  let s: number
+  let t: number
+  if (denom > 1e-9) {
+    s = (b * f - c * e) / denom
+    t = (b * s + f) / e
+  } else {
+    s = 0
+    t = f / e
+  }
+
+  // 线段参数限制到 [0, 1]
+  if (t < 0) {
+    t = 0
+    s = -c
+  } else if (t > 1) {
+    t = 1
+    s = b - c
+  }
+  // 射线参数限制到 >= 0
+  if (s < 0) {
+    s = 0
+    t = THREE.MathUtils.clamp(f / e, 0, 1)
+  }
+
+  _closestOnRay.copy(origin).addScaledVector(direction, s)
+  _closestOnSeg.copy(p0).addScaledVector(d2, t)
+  return _closestOnRay.distanceTo(_closestOnSeg)
+}
+
+/** 每帧更新信标：按鼠标射线挑选最近的光柱作为悬停目标，并缓动应用高亮效果 */
+function updateBeaconStates(delta: number) {
+  const focusedRecord = focusedIndex >= 0 ? beaconRuntimes[focusedIndex] ?? null : null
+  const acquireRadius = effectiveDistance * BEACON_HOVER_RADIUS_RATIO
+  const keepRadius = acquireRadius * BEACON_HOVER_KEEP_MULTIPLIER
+
+  // 计算每条光柱轴线到鼠标射线的距离，取最近的（几何最近点，且用固定高度，不受悬停动画影响）
+  let nearest: BeaconRuntime | null = null
+  let nearestDistance = Infinity
+  if (camera) {
+    raycaster.setFromCamera(pointerNdc, camera)
+    const ray = raycaster.ray
+    for (const record of beaconRuntimes) {
+      record.root.getWorldPosition(_beaconBase)
+      _segStart.copy(_beaconBase)
+      _segEnd.set(_beaconBase.x, _beaconBase.y + BEACON_HEIGHT, _beaconBase.z)
+      record.rayDistance = distanceRayToSegment(ray.origin, ray.direction, _segStart, _segEnd)
+      // 聚焦时只有被聚焦的光柱可悬停（其它已熄灭）
+      if (focusedRecord && record !== focusedRecord) continue
+      if (record.rayDistance < nearestDistance) {
+        nearestDistance = record.rayDistance
+        nearest = record
+      }
+    }
+  }
+
+  // 迟滞：进入用 acquireRadius，保持用更大的 keepRadius，避免边界处来回跳变
+  let hovered: BeaconRuntime | null = null
+  if (nearest && nearestDistance <= acquireRadius) {
+    hovered = nearest
+  } else if (
+    currentHovered &&
+    (!focusedRecord || currentHovered === focusedRecord) &&
+    currentHovered.rayDistance <= keepRadius
+  ) {
+    hovered = currentHovered
+  }
+
+  // 外部（据点按钮）要求高亮时优先，走的是同一套高亮缓动，所以视觉与鼠标悬停一致
+  const requested = props.hoveredId
+    ? beaconRuntimes.find((item) => item.config.id === props.hoveredId) ?? null
+    : null
+  if (requested) hovered = requested
+
+  // 只要有据点被选中（聚焦），所有信标一律退出"悬停"状态：
+  // 此时再让光柱随悬停变高变亮没有意义。
+  // 没有选中任何据点时，上面的射线悬停与据点按钮悬停照常生效。
+  // 这里只改目标值，record.hover 仍按缓动过渡，所以进/出悬停永远是平滑的。
+  if (focusedRecord) {
+    hovered = null
+  }
+
+  currentHovered = hovered
+
+  const ease = 1 - Math.exp(-BEACON_HOVER_EASE * delta)
+  // 熄灭 / 点亮走稍慢的一条曲线，跟相机滑动同步
+  const dimEase = 1 - Math.exp(-BEACON_DIM_EASE * delta)
+  for (let index = 0; index < beaconRuntimes.length; index++) {
+    const record = beaconRuntimes[index]
+    const target = record === hovered ? 1 : 0
+    record.hover += (target - record.hover) * ease
+    const h = record.hover
+
+    // 熄灭程度：聚焦时其它光柱 -> 1
+    const dimTarget = focusedIndex >= 0 && index !== focusedIndex ? 1 : 0
+    record.dim += (dimTarget - record.dim) * dimEase
+    const lit = 1 - record.dim
+
+    // 亮度
+    const brightness = BEACON_INTENSITY * (1 + h * (BEACON_HOVER_BRIGHTNESS - 1)) * lit
+    record.pillarMaterial.uniforms.uIntensity.value = brightness
+    record.coreMaterial.uniforms.uIntensity.value = brightness
+
+    // 高度（只缩放竖直方向，着色器的渐变不受影响）
+    const heightScale = 1 + h * (BEACON_HOVER_HEIGHT - 1)
+    record.pillar.scale.y = heightScale
+    record.core.scale.y = heightScale
+    record.pillar.position.y = (BEACON_HEIGHT * heightScale) / 2
+    record.core.position.y = (BEACON_HEIGHT * heightScale) / 2
+
+    // 粒子
+    record.particleMaterial.uniforms.uTime.value = beaconElapsed
+    record.particleMaterial.uniforms.uViewportHeight.value = renderer
+      ? renderer.domElement.height
+      : 1
+    record.particleMaterial.uniforms.uOpacity.value = BEACON_PARTICLE_OPACITY * lit
+
+    // 波纹：速度乘在高亮系数上；相位用积分累加，速度变化时相位连续、不会跳变
+    const rippleSpeed = BEACON_RIPPLE_SPEED * (1 + h * (BEACON_HOVER_RIPPLE_SPEED - 1))
+    record.ripplePhase += rippleSpeed * delta
+    record.rippleMaterial.uniforms.uPhase.value = record.ripplePhase
+    record.rippleMaterial.uniforms.uOpacity.value = BEACON_RIPPLE_OPACITY * lit
+
+    // 文字：缩放补偿 + 悬停放大，并按左边缘对齐
+    const label = record.label
+    if (label) {
+      record.root.getWorldPosition(_beaconBase)
+      // 只依赖当前实际距离（参考距离是固定常量），与 CAMERA_START_DISTANCE 无关
+      const ratio = effectiveDistance / BEACON_LABEL_REFERENCE_DISTANCE
+      const zoomFactor = Math.pow(ratio, BEACON_LABEL_ZOOM_COMPENSATION)
+      const factor = zoomFactor * (1 + h * (BEACON_HOVER_LABEL_SCALE - 1))
+      const baseWidth = (label.userData.baseWidth as number) ?? 1
+      const baseHeight = (label.userData.baseHeight as number) ?? 1
+      const width = baseWidth * factor
+      label.scale.set(width, baseHeight * factor, 1)
+      label.material.opacity = lit
+      label.visible = record.dim < 0.99
+      // 世界坐标定位（模型根只有平移，所以世界偏移 = 本地偏移）
+      label.position.set(
+        _beaconBase.x + BEACON_LABEL_OFFSET_X + width / 2,
+        _beaconBase.y + BEACON_LABEL_Y,
+        _beaconBase.z,
+      )
+    }
+  }
+}
+
+/** 所有信标挂到模型上（随模型一起移动），位置相对模型中心、底部贴模型底面 */
+function addBeacons(root: THREE.Object3D, center: THREE.Vector3, baseY: number) {
+  beaconGroup = new THREE.Group()
+  beaconGroup.name = 'beacons'
+
+  for (const config of props.beacons) {
+    const record = createBeacon(config)
+    record.root.position.set(center.x + config.x, baseY, center.z + config.z)
+    beaconGroup.add(record.root)
+  }
+
+  root.add(beaconGroup)
+}
+
+/** 清理并按最新 props 重建光柱（props 变化时调用） */
+function rebuildBeacons() {
+  if (!model) return
+  for (const sprite of beaconLabels) {
+    labelScene?.remove(sprite)
+    disposeObjectTree(sprite)
+  }
+  beaconLabels.length = 0
+  if (beaconGroup) {
+    model.remove(beaconGroup)
+    disposeObjectTree(beaconGroup)
+    beaconGroup = null
+  }
+  beaconRuntimes.length = 0
+  currentHovered = null
+  pressedBeacon = null
+  focusedIndex = -1
+  focusAmount = 0
+  addBeacons(model, modelCenter, modelBaseY)
+}
+
+/**
+ * 白色科幻网格。网格本身会跟随模型平移（见渲染循环），
+ * 而径向淡出在着色器里按"世界坐标到相机注视点(CAMERA_TARGET)的距离"计算，
+ * 所以渐变范围始终以相机注视位置为中心，与网格自身的位置无关。
+ */
+function createGroundGrid(modelSize: THREE.Vector3) {
+  const horizontal = Math.max(modelSize.x, modelSize.z) || 1
+  const span = GRID_SPAN > 0 ? GRID_SPAN : horizontal * GRID_SPAN_RATIO
+  const half = span / 2
+  const step = span / GRID_DIVISIONS
+
+  gridHalfSpan = half
+
+  const positions: number[] = []
+  for (let i = 0; i <= GRID_DIVISIONS; i++) {
+    const k = -half + i * step
+    positions.push(-half, 0, k, half, 0, k) // 平行 X 轴
+    positions.push(k, 0, -half, k, 0, half) // 平行 Z 轴
+  }
+
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+
+  const material = createGroundFadeMaterial(GRID_COLOR, GRID_OPACITY, 'fadeOut')
+
+  // 网格位于 y = 0 平面，x/z 会跟随模型同步
+  return new THREE.LineSegments(geometry, material)
+}
+
+/**
+ * 地面（网格 / 等高线）共用的径向材质：
+ * 透明度按"世界坐标到相机注视点(CAMERA_TARGET)的距离"计算，所以渐变始终以相机注视位置为中心，
+ * 与地面自身的位置无关；渐变范围随缩放变化（缩得越小、范围越大）。
+ * 两者都有一圈"外圈淡出"，区别是起点不同：
+ *  - 'fadeOut'（网格）：从中心向外就开始变淡，到网格淡出结束半径处完全消失（结束半径随缩放变化）；
+ *  - 'rise'（等高线）：先保持透明，到"网格完全消失的半径"再向外逐渐显现；
+ *    它的外圈淡出走 contourFarFadeRange（自身边缘淡出 + 不超过网格消失半径 1.5 倍），
+ *    用于把方形的几何边界藏掉。
+ */
+function createGroundFadeMaterial(color: number, opacity: number, mode: 'fadeOut' | 'rise') {
+  const gridFadeStart = gridHalfSpan * GRID_FADE_START_RATIO
+  const gridFadeEnd = Math.max(
+    gridHalfSpan * fadeEndRatioForDistance(distance),
+    gridFadeStart + 1e-4,
+  )
+  const far = contourFarFadeRange(gridFadeEnd)
+  const fadeStart = mode === 'fadeOut' ? gridFadeStart : far.start
+  const fadeEnd = mode === 'fadeOut' ? gridFadeEnd : far.end
+  // 等高线接棒点 = 网格完全消失处（CONTOUR_TAKEOVER_RATIO = 1）；再向外一个过渡带内逐渐完全显示
+  const riseStart = gridFadeEnd * CONTOUR_TAKEOVER_RATIO
+  const riseEnd = Math.max(riseStart + contourHalfSpan * CONTOUR_RISE_RATIO, riseStart + 1e-4)
+
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: new THREE.Color(color) },
+      uOpacity: { value: opacity },
+      uFadeCenter: { value: new THREE.Vector2(CAMERA_TARGET.x, CAMERA_TARGET.z) },
+      uFadeStart: { value: fadeStart },
+      uFadeEnd: { value: fadeEnd },
+      uFadeCurve: { value: GRID_FADE_CURVE },
+      uRise: { value: mode === 'rise' ? 1 : 0 },
+      uRiseStart: { value: riseStart },
+      uRiseEnd: { value: riseEnd },
+    },
+    vertexShader: /* glsl */ `
+      varying vec3 vWorldPosition;
+      void main() {
+        vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+        vWorldPosition = worldPosition.xyz;
+        gl_Position = projectionMatrix * viewMatrix * worldPosition;
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uColor;
+      uniform float uOpacity;
+      uniform vec2 uFadeCenter;
+      uniform float uFadeStart;
+      uniform float uFadeEnd;
+      uniform float uFadeCurve;
+      uniform float uRise;
+      uniform float uRiseStart;
+      uniform float uRiseEnd;
+      varying vec3 vWorldPosition;
+      void main() {
+        float radius = distance(vWorldPosition.xz, uFadeCenter);
+        float t = clamp((radius - uFadeStart) / max(uFadeEnd - uFadeStart, 1e-4), 0.0, 1.0);
+        // 外圈淡出：网格从中心就开始，等高线固定在远处边缘
+        float fadeOut = pow(1.0 - t, uFadeCurve);
+        // 等高线：从网格消失处起向外平滑显现（smoothstep 两端平滑，不会突变）
+        float rise = mix(1.0, smoothstep(uRiseStart, uRiseEnd, radius), uRise);
+        float alpha = fadeOut * rise * uOpacity;
+        if (alpha <= 0.001) discard;
+        gl_FragColor = vec4(uColor, alpha);
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
+  })
+}
+
+/**
+ * 地面等高线：把 public/model/contour.glb 摆平并缩放到与网格相同的地面尺寸，
+ * 并在"网格完全消失"的半径之外显示（见 createGroundFadeMaterial 的 rise 模式）。
+ * 源模型是 400×400 的平面等高线（X/Y 为平面，Z 为高程）。
+ */
+function createContourGround(root: THREE.Object3D): THREE.LineSegments | null {
+  let found: THREE.LineSegments | null = null
+  root.traverse((object) => {
+    const candidate = object as THREE.LineSegments
+    if (!found && candidate.isLineSegments) found = candidate
+  })
+  if (!found) return null
+  const lines: THREE.LineSegments = found
+
+  const geometry = lines.geometry
+  geometry.computeBoundingBox()
+  const bounds = geometry.boundingBox ?? new THREE.Box3()
+  const boundsSize = bounds.getSize(new THREE.Vector3())
+  const footprint = Math.max(boundsSize.x, boundsSize.z) || 1
+  const horizontal = Math.max(modelSize.x, modelSize.z) || footprint
+  const span = CONTOUR_SPAN > 0 ? CONTOUR_SPAN : horizontal * CONTOUR_SPAN_RATIO
+  const scale = span / footprint
+
+  // 摆平 + 缩放：GLB 的 +Y(平面) -> 世界 -Z，GLB 的 +Z(高程) -> 世界 +Y
+  geometry.applyMatrix4(
+    new THREE.Matrix4().compose(
+      new THREE.Vector3(),
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)),
+      new THREE.Vector3(scale, scale, scale * CONTOUR_HEIGHT_SCALE),
+    ),
+  )
+  geometry.computeBoundingBox()
+  const box = geometry.boundingBox ?? new THREE.Box3()
+  const boxCenter = box.getCenter(new THREE.Vector3())
+  // 把几何体原点挪到底面中心，之后直接用 position 放到模型中心即可
+  geometry.translate(-boxCenter.x, -box.min.y, -boxCenter.z)
+  geometry.computeBoundingSphere()
+
+  // 替换 GLTF 自带的纯色材质，改用带径向淡出的材质
+  const sourceMaterial = lines.material
+  if (Array.isArray(sourceMaterial)) {
+    sourceMaterial.forEach((item) => disposeMaterial(item))
+  } else if (sourceMaterial) {
+    disposeMaterial(sourceMaterial)
+  }
+
+  lines.removeFromParent()
+  contourHalfSpan = span / 2
+  // 等高线：从网格完全消失处向外逐渐显现，再在自身远处边缘淡出
+  lines.material = createGroundFadeMaterial(
+    CONTOUR_GROUND_COLOR,
+    CONTOUR_GROUND_OPACITY,
+    'rise',
+  )
+  return lines
+}
+
+/** 创建地面：网格（中心向外淡出）+ 等高线（网格消失处向外显现），都摆到模型中心正下方 */
+function buildGround() {
+  if (!scene || !model) return
+
+  if (!groundGrid) {
+    groundGrid = createGroundGrid(modelSize)
+    groundGrid.position.set(model.position.x, GROUND_Y, model.position.z)
+    scene.add(groundGrid)
+  }
+
+  // 等高线模型可能比地图后加载完，这里只在拿到模型后创建一次
+  if (!groundContour && contourRoot) {
+    groundContour = createContourGround(contourRoot)
+    contourRoot = null
+    if (groundContour) {
+      groundContour.position.set(model.position.x, GROUND_Y, model.position.z)
+      scene.add(groundContour)
+    }
+  }
+
+  updateGroundFadeRange(effectiveDistance)
+  updateGroundFadeCenter(CAMERA_TARGET)
+}
+
+function setupModel(loaded: THREE.Object3D) {
+  if (!scene) return
+
+  styleMaterials(loaded)
+  scene.add(loaded)
+
+  const box = new THREE.Box3().setFromObject(loaded)
+  const size = box.getSize(new THREE.Vector3())
+  const center = box.getCenter(new THREE.Vector3())
+
+  // 让模型中心落在 INITIAL_COORD，并让底面贴在网格平面(原点)上方一点点
+  loaded.position.set(
+    INITIAL_COORD.x - center.x,
+    INITIAL_COORD.y + size.y / 2 - center.y + MODEL_GROUND_LIFT,
+    INITIAL_COORD.z - center.z,
+  )
+
+  model = loaded
+  modelCenter.copy(center)
+  modelBaseY = box.min.y
+  modelSize.copy(size)
+
+  addWaterGlow(loaded, size)
+  // 信标挂到模型上，随模型移动；位置相对模型中心、底部贴模型底面(box.min.y)
+  addBeacons(loaded, modelCenter, modelBaseY)
+
+  // 地面（网格或等高线）跟随模型：位置与模型保持一致，y 固定在地面平面
+  buildGround()
+
+  // 相机初始参数：水平角由 CAMERA_BEARING_DEG 决定，缩放由 CAMERA_START_DISTANCE 决定
+  distance = THREE.MathUtils.clamp(
+    CAMERA_START_DISTANCE,
+    CAMERA_MIN_DISTANCE,
+    CAMERA_MAX_DISTANCE,
+  )
+  updateCameraFrame(0)
+}
+
+function setPointerNdc(clientX: number, clientY: number) {
+  if (!canvasEl) return
+  const rect = canvasEl.getBoundingClientRect()
+  pointerNdc.x = ((clientX - rect.left) / rect.width) * 2 - 1
+  pointerNdc.y = -((clientY - rect.top) / rect.height) * 2 + 1
+}
+
+/** 用屏幕坐标做射线拾取，返回最近且在阈值内的光柱 */
+function pickBeaconAt(clientX: number, clientY: number): BeaconRuntime | null {
+  if (!camera || !canvasEl) return null
+  const rect = canvasEl.getBoundingClientRect()
+  _pickNdc.set(
+    ((clientX - rect.left) / rect.width) * 2 - 1,
+    -((clientY - rect.top) / rect.height) * 2 + 1,
+  )
+  raycaster.setFromCamera(_pickNdc, camera)
+  const threshold = effectiveDistance * BEACON_HOVER_RADIUS_RATIO
+  const ray = raycaster.ray
+
+  let best: BeaconRuntime | null = null
+  let bestDistance = Infinity
+  for (const record of beaconRuntimes) {
+    if (focusedIndex >= 0 && beaconRuntimes[focusedIndex] !== record) continue
+    record.root.getWorldPosition(_beaconBase)
+    _segStart.copy(_beaconBase)
+    _segEnd.set(_beaconBase.x, _beaconBase.y + BEACON_HEIGHT, _beaconBase.z)
+    const d = distanceRayToSegment(ray.origin, ray.direction, _segStart, _segEnd)
+    if (d < bestDistance) {
+      bestDistance = d
+      best = record
+    }
+  }
+  return bestDistance <= threshold ? best : null
+}
+
+/** 点击光柱：聚焦该光柱（其它光柱熄灭），并通知外部 */
+function activateBeacon(record: BeaconRuntime) {
+  const index = beaconRuntimes.indexOf(record)
+  if (index < 0) return
+  focusedIndex = index
+  emit('beacon-select', record.config)
+  record.config.onClick?.(record.config)
+}
+
+/** 退出聚焦：恢复点击前的视角与其它光柱 */
+function exitFocus() {
+  if (focusedIndex < 0) return
+  focusedIndex = -1
+  emit('beacon-close')
+}
+
+/** 指针交互只保留两件事：光柱悬停（射线检测）和点击选中；视角由微动控制 */
+function onPointerDown(event: PointerEvent) {
+  setPointerNdc(event.clientX, event.clientY)
+  // iOS 的陀螺仪权限必须在用户手势里申请
+  requestGyro(event.pointerType === 'touch')
+
+  // 聚焦状态下任意按下：先退出聚焦（回到选中前的视角），本次按下不再触发点击
+  if (focusedIndex >= 0) {
+    exitFocus()
+    pressedBeacon = null
+    pressConsumed = true
+    return
+  }
+
+  pressConsumed = false
+  // 记录按下瞬间悬停的光柱（点击要求按下与抬起时都悬停在同一个光柱上）
+  pressedBeacon = event.button === 0 ? pickBeaconAt(event.clientX, event.clientY) : null
+}
+
+function onPointerMove(event: PointerEvent) {
+  // 记录指针位置用于光柱悬停检测
+  setPointerNdc(event.clientX, event.clientY)
+  // 触摸端交给陀螺仪，不做"手指位置驱动视角"
+  if (event.pointerType === 'touch') return
+  updateLookFromPointer(event.clientX, event.clientY)
+}
+
+function onPointerUp(event: PointerEvent) {
+  // 点击：按下与抬起都悬停在同一个光柱上才触发
+  if (event.button === 0 && pressedBeacon && !pressConsumed) {
+    const upBeacon = pickBeaconAt(event.clientX, event.clientY)
+    if (upBeacon && upBeacon === pressedBeacon) {
+      activateBeacon(upBeacon)
+    }
+  }
+  pressedBeacon = null
+  pressConsumed = false
+}
+
+/** 触摸被系统打断（比如变成滚动）：当作没点过 */
+function onPointerCancel() {
+  pressedBeacon = null
+  pressConsumed = false
+}
+
+function onPointerLeave() {
+  // 指针移出画布后不再悬停任何光柱，视角微动也回到初始值
+  pointerNdc.set(-2, -2)
+  pressedBeacon = null
+  lookDriftTargetX = 0
+  lookDriftTargetY = 0
+}
+
+function onContextMenu(event: MouseEvent) {
+  event.preventDefault()
+}
+
+function resize() {
+  const container = containerRef.value
+  if (!container || !renderer || !camera) return
+
+  const width = container.clientWidth
+  const height = container.clientHeight
+  if (width === 0 || height === 0) return
+  // 尺寸没变就不动画面（地址栏动画期间会连刷 resize，但尺寸会反复回到同一个值）
+  if (width === appliedWidth && height === appliedHeight) return
+  appliedWidth = width
+  appliedHeight = height
+
+  const pixelRatio = Math.min(window.devicePixelRatio, 2)
+  camera.aspect = width / height
+  camera.updateProjectionMatrix()
+  renderer.setPixelRatio(pixelRatio)
+  renderer.setSize(width, height, false)
+  composer?.setPixelRatio(pixelRatio)
+  composer?.setSize(width, height)
+}
+
+/** 把短时间内的连续尺寸变化合并成一次 resize */
+function scheduleResize() {
+  window.clearTimeout(resizeTimer)
+  resizeTimer = window.setTimeout(resize, RESIZE_DEBOUNCE_MS)
+}
+
+function init() {
+  const container = containerRef.value
+  if (!container) return
+
+  const width = container.clientWidth || 1
+  const height = container.clientHeight || 1
+  appliedWidth = width
+  appliedHeight = height
+  const pixelRatio = Math.min(window.devicePixelRatio, 2)
+
+  scene = new THREE.Scene()
+  scene.background = new THREE.Color(0x0b1020)
+  labelScene = new THREE.Scene()
+
+  camera = new THREE.PerspectiveCamera(45, width / height, 10, 30000)
+  updateCameraFrame(0)
+
+  renderer = new THREE.WebGLRenderer({ antialias: true })
+  renderer.setPixelRatio(pixelRatio)
+  renderer.setSize(width, height, false)
+  renderer.outputColorSpace = THREE.SRGBColorSpace
+  renderer.toneMapping = THREE.ACESFilmicToneMapping
+  renderer.toneMappingExposure = 1.0
+  container.appendChild(renderer.domElement)
+  canvasEl = renderer.domElement
+  canvasEl.addEventListener('pointerdown', onPointerDown)
+  canvasEl.addEventListener('pointermove', onPointerMove)
+  canvasEl.addEventListener('pointerup', onPointerUp)
+  canvasEl.addEventListener('pointercancel', onPointerCancel)
+  canvasEl.addEventListener('pointerleave', onPointerLeave)
+  canvasEl.addEventListener('contextmenu', onContextMenu)
+  // 陀螺仪：没有权限接口的浏览器（Android 等）直接挂载；
+  // iOS 要等用户按到画布上时再申请（见 onPointerDown → requestGyro）
+  requestGyro(false)
+
+  // 灯光：偏柔和，让白楼干净、水面不产生刺眼高光
+  const hemisphere = new THREE.HemisphereLight(0xffffff, 0x223344, 0.6)
+  scene.add(hemisphere)
+
+  const keyLight = new THREE.DirectionalLight(0xffffff, 1.0)
+  keyLight.position.set(8, 14, 10)
+  scene.add(keyLight)
+
+  const fillLight = new THREE.DirectionalLight(0xffffff, 0.35)
+  fillLight.position.set(-10, 6, -8)
+  scene.add(fillLight)
+
+  // 后期：RenderPass -> Bloom -> OutputPass
+  composer = new EffectComposer(renderer)
+  composer.setPixelRatio(pixelRatio)
+  composer.setSize(width, height)
+  composer.addPass(new RenderPass(scene, camera))
+  composer.addPass(
+    new UnrealBloomPass(
+      new THREE.Vector2(width, height),
+      BLOOM_STRENGTH,
+      BLOOM_RADIUS,
+      BLOOM_THRESHOLD,
+    ),
+  )
+  composer.addPass(new OutputPass())
+
+  const loader = new GLTFLoader()
+  loader.load(
+    MODEL_URL,
+    (gltf) => setupModel(gltf.scene),
+    undefined,
+    (error) => {
+      console.error('[BitnpMap] 加载模型失败:', error)
+    },
+  )
+
+  // 地面等高线：与地图并行加载，谁先完成都能正确摆到地图下方
+  loader.load(
+    CONTOUR_URL,
+    (gltf) => {
+      contourRoot = gltf.scene
+      buildGround()
+    },
+    undefined,
+    (error) => {
+      console.error('[BitnpMap] 加载等高线失败:', error)
+    },
+  )
+
+  resizeObserver = new ResizeObserver(scheduleResize)
+  resizeObserver.observe(container)
+  window.addEventListener('resize', scheduleResize)
+
+  const renderLoop = () => {
+    animationId = requestAnimationFrame(renderLoop)
+    // 暂停：跳过这一帧（相机、粒子、辉光都停住），恢复时从上一帧继续
+    if (props.paused) return
+    const delta = Math.min(beaconClock.getDelta(), 0.1)
+    beaconElapsed += delta
+    // 地面（网格 + 等高线）随模型一起移动（渐变中心固定在相机注视点，由着色器处理）
+    if (model) {
+      if (groundGrid) {
+        groundGrid.position.x = model.position.x
+        groundGrid.position.z = model.position.z
+      }
+      if (groundContour) {
+        groundContour.position.x = model.position.x
+        groundContour.position.z = model.position.z
+      }
+    }
+    updateCameraFrame(delta)
+    updateBeaconStates(delta)
+    composer?.render()
+    // 后期之后再画文字，使其完全不受辉光影响
+    if (renderer && labelScene && camera) {
+      renderer.autoClear = false
+      renderer.render(labelScene, camera)
+      renderer.autoClear = true
+    }
+  }
+  renderLoop()
+}
+
+/** 释放材质，并顺带释放它引用的贴图（例如文字 Sprite 的 CanvasTexture） */
+function disposeMaterial(material: THREE.Material) {
+  const withMap = material as THREE.Material & { map?: THREE.Texture | null }
+  withMap.map?.dispose()
+  material.dispose()
+}
+
+/** 释放一棵对象树里的几何体与材质 */
+function disposeObjectTree(root: THREE.Object3D) {
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh
+    if (mesh.geometry) mesh.geometry.dispose()
+    const material = mesh.material
+    if (Array.isArray(material)) {
+      material.forEach((item) => disposeMaterial(item))
+    } else if (material) {
+      disposeMaterial(material)
+    }
+  })
+}
+
+function dispose() {
+  cancelAnimationFrame(animationId)
+  window.removeEventListener('resize', scheduleResize)
+  window.clearTimeout(resizeTimer)
+  resizeObserver?.disconnect()
+  resizeObserver = null
+
+  if (canvasEl) {
+    canvasEl.removeEventListener('pointerdown', onPointerDown)
+    canvasEl.removeEventListener('pointermove', onPointerMove)
+    canvasEl.removeEventListener('pointerup', onPointerUp)
+    canvasEl.removeEventListener('pointercancel', onPointerCancel)
+    canvasEl.removeEventListener('pointerleave', onPointerLeave)
+    canvasEl.removeEventListener('contextmenu', onContextMenu)
+    canvasEl = null
+  }
+
+  if (gyroAttached) {
+    window.removeEventListener('deviceorientation', onDeviceOrientation)
+    gyroAttached = false
+    gyroBase = null
+  }
+
+  composer?.dispose()
+  composer = null
+
+  if (renderer) {
+    renderer.dispose()
+    renderer.domElement.remove()
+    renderer = null
+  }
+
+  if (scene) disposeObjectTree(scene)
+  if (labelScene) disposeObjectTree(labelScene)
+  scene = null
+  labelScene = null
+  camera = null
+  model = null
+  groundGrid = null
+  groundContour = null
+  if (contourRoot) disposeObjectTree(contourRoot)
+  contourRoot = null
+  beaconGroup = null
+  beaconRuntimes.length = 0
+  beaconLabels.length = 0
+  currentHovered = null
+  pressedBeacon = null
+  focusedIndex = -1
+  focusAmount = 0
+}
+
+// props 变化时按最新配置重建光柱
+watch(
+  () => props.beacons,
+  () => rebuildBeacons(),
+  { deep: true },
+)
+
+// 外部指定聚焦目标时，走和「点击光柱」完全一样的流程（含镜头推近与其它光柱熄灭）
+watch(
+  () => props.focusedId,
+  (id) => {
+    if (!id) {
+      exitFocus()
+      return
+    }
+    const record = beaconRuntimes.find((item) => item.config.id === id)
+    if (!record) return
+    if (focusedIndex >= 0 && beaconRuntimes[focusedIndex] === record) return
+    activateBeacon(record)
+  },
+)
+
+onMounted(init)
+onBeforeUnmount(dispose)
+</script>
+
+<template>
+  <div ref="containerRef" class="bitnp-map"></div>
+</template>
+
+<style scoped>
+/* 从 bitnp-outposts 移植过来，唯一改动：position 由 fixed 改为 absolute，
+   让地图铺满"活动场地"这一页的容器（而不是整个视口）。容器需要 position: relative。 */
+.bitnp-map {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  /* 不再支持拖动视角，所以手指滑动交还给页面（竖向滚动），
+     滚轮也交还给页面（否则地图上的滚轮事件会被吃掉、滚不动页面） */
+  touch-action: pan-y;
+  cursor: default;
+}
+
+.bitnp-map :deep(canvas) {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+</style>

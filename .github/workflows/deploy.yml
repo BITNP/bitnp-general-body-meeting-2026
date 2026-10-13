@@ -1,0 +1,67 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # 也可以在 Actions 页面手动点一次
+  workflow_dispatch:
+
+# 同一时间只跑一个部署，新的把排队中的旧任务顶掉
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+# GitHub Pages 部署需要的权限（用 OIDC，不需要个人 token）
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # pnpm 版本读 package.json 里的 packageManager 字段
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # 顺便把 Pages 的部署信息（子路径）读出来，下面 build 时传给 Vite
+      - name: Setup Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # 这个脚本里带 vue-tsc 类型检查，类型不过就不会部署
+      - name: Build
+        run: pnpm build
+        env:
+          # configure-pages 给出的 base_path（形如 /bitnp-general-body-meeting-2026），
+          # 这样换仓库名或用自定义域名都不用改 vite.config.ts
+          VITE_BASE: ${{ steps.pages.outputs.base_path }}/
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
