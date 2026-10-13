@@ -24,9 +24,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # pnpm 版本读 package.json 里的 packageManager 字段
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
+        with:
+          # 与本地保持一致（本地 `pnpm -v` 是 12.4.2）
+          version: 12
 
       - name: Setup Node
         uses: actions/setup-node@v4

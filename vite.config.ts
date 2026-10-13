@@ -7,8 +7,8 @@ import { defineConfig } from 'vite'
 const REPO_BASE = '/bitnp-general-body-meeting-2026/'
 
 // https://vite.dev/config/
-export default defineConfig(({ command }) => ({
-  // 本地 dev 仍然用根路径，只有 build 才切到子路径
-  base: process.env.VITE_BASE ?? (command === 'build' ? REPO_BASE : '/'),
+export default defineConfig(({ command, isPreview }) => ({
+  // 本地 dev 仍然用根路径；build / preview 用子路径（preview 要跟产物一致才能预览）
+  base: process.env.VITE_BASE ?? (command === 'build' || isPreview ? REPO_BASE : '/'),
   plugins: [vue()],
 }))
