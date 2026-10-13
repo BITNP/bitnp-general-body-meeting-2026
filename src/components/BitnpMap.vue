@@ -6,7 +6,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
-import type { BeaconConfig } from '../types'
+import type { BeaconConfig, GyroStatus } from '../types'
 
 // 用 BASE_URL 前缀，保证部署到子路径（GitHub Pages）时也能正确加载
 const MODEL_URL = `${import.meta.env.BASE_URL}model/LiangxiangMap.glb`
@@ -36,6 +36,8 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'beacon-select', beacon: BeaconConfig): void
   (e: 'beacon-close'): void
+  /** 陀螺仪状态变化（页面用它决定要不要提示用户） */
+  (e: 'gyro-status', status: GyroStatus): void
 }>()
 
 // ---- 可调参数 ----------------------------------------------------------
@@ -282,6 +284,11 @@ let lookDriftY = 0
 let gyroBase: { beta: number; gamma: number } | null = null
 let gyroAttached = false
 let gyroRequested = false
+let gyroRequestPending = false
+let gyroStatus: GyroStatus = 'unsupported'
+let gyroProbeTimer = 0
+// 挂载后多久没收到数据就认为"没戏"（权限没给 / 系统里关掉了动作与方向访问）
+const GYRO_PROBE_TIMEOUT = 2500
 
 const WORLD_UP = new THREE.Vector3(0, 1, 0)
 const _right = new THREE.Vector3()
@@ -492,7 +499,11 @@ function onDeviceOrientation(event: DeviceOrientationEvent) {
   const beta = event.beta
   const gamma = event.gamma
   if (beta === null || gamma === null) return
-  if (!gyroBase) gyroBase = { beta, gamma }
+  if (!gyroBase) {
+    // 第一帧有效数据当作"初始姿态"
+    gyroBase = { beta, gamma }
+    setGyroStatus('active')
+  }
 
   const landscape = window.innerWidth >= window.innerHeight
   const lateral = landscape ? beta - gyroBase.beta : gamma - gyroBase.gamma
@@ -502,21 +513,64 @@ function onDeviceOrientation(event: DeviceOrientationEvent) {
   lookDriftTargetY = gyroToDrift(vertical) * LOOK_GYRO_SIGN_Y
 }
 
+function setGyroStatus(next: GyroStatus) {
+  if (gyroStatus === next) return
+  gyroStatus = next
+  emit('gyro-status', next)
+}
+
+/** 开始计时：一段时间内没有收到任何数据就判定为拿不到数据 */
+function probeGyro() {
+  window.clearTimeout(gyroProbeTimer)
+  if (gyroBase) {
+    setGyroStatus('active')
+    return
+  }
+  // 已经判定失败过就不要反复在"等待/失败"之间闪，提示留着让用户去开权限
+  if (gyroStatus !== 'blocked') setGyroStatus('waiting')
+  gyroProbeTimer = window.setTimeout(() => {
+    if (!gyroBase) setGyroStatus('blocked')
+  }, GYRO_PROBE_TIMEOUT)
+}
+
 function attachGyro() {
   if (gyroAttached) return
   gyroAttached = true
   gyroBase = null
   window.addEventListener('deviceorientation', onDeviceOrientation)
+  probeGyro()
 }
 
 /**
- * 申请 / 挂载陀螺仪。
- * iOS 13+ 必须在用户手势（这里是按到画布上）里调用 requestPermission，
- * 所以桌面端和没有权限接口的浏览器直接挂载，iOS 等第一次触摸。
+ * 任意位置的用户手势都拿来"申请 / 重试"陀螺仪。
+ * iOS 13+ 的 requestPermission 必须在用户手势里调用，而用户不一定会先点地图
+ * （可能是点据点按钮、点侧栏、或者只是滑动屏幕），所以监听放在 document 上。
  */
-function requestGyro(fromTouch: boolean) {
+function onAnyGesture() {
+  if (!gyroAttached) {
+    requestGyro(true)
+    return
+  }
+  // 已经挂上但一直没数据：再探一次（比如用户刚从系统设置里打开权限）
+  probeGyro()
+}
+
+/**
+ * 申请 / 挂载陀螺仪（只对触屏设备生效；PC 用鼠标位置驱动视角）。
+ * · 没有 requestPermission 的浏览器（Android 等）直接挂载
+ * · iOS 必须在用户手势里申请，所以没有手势时先停在 needs-gesture
+ */
+function requestGyro(fromGesture: boolean) {
   if (gyroAttached) return
-  if (typeof window === 'undefined' || typeof DeviceOrientationEvent === 'undefined') return
+  if (typeof window === 'undefined' || typeof DeviceOrientationEvent === 'undefined') {
+    setGyroStatus('unsupported')
+    return
+  }
+  // 只有触屏设备才用陀螺仪；PC 上不申请、也不提示
+  if (!window.matchMedia('(pointer: coarse)').matches) {
+    setGyroStatus('unsupported')
+    return
+  }
 
   const ctor = DeviceOrientationEvent as typeof DeviceOrientationEvent & {
     requestPermission?: () => Promise<'granted' | 'denied'>
@@ -525,16 +579,29 @@ function requestGyro(fromTouch: boolean) {
     attachGyro()
     return
   }
-  // 只弹一次系统权限框；用户拒绝后不再反复请求
-  if (!fromTouch || gyroRequested) return
+  // iOS：没有手势就只是等（不能主动弹权限框）
+  if (!fromGesture) {
+    setGyroStatus('needs-gesture')
+    return
+  }
+  if (gyroRequestPending) return
+  if (gyroRequested && gyroStatus !== 'blocked' && gyroStatus !== 'needs-gesture') return
   gyroRequested = true
-
+  gyroRequestPending = true
   ctor
     .requestPermission()
     .then((state) => {
-      if (state === 'granted') attachGyro()
+      gyroRequestPending = false
+      if (state === 'granted') {
+        attachGyro()
+        return
+      }
+      setGyroStatus('blocked')
     })
-    .catch(() => undefined)
+    .catch(() => {
+      gyroRequestPending = false
+      setGyroStatus('blocked')
+    })
 }
 
 function materialNames(mesh: THREE.Mesh): string[] {
@@ -1547,8 +1614,6 @@ function exitFocus() {
 /** 指针交互只保留两件事：光柱悬停（射线检测）和点击选中；视角由微动控制 */
 function onPointerDown(event: PointerEvent) {
   setPointerNdc(event.clientX, event.clientY)
-  // iOS 的陀螺仪权限必须在用户手势里申请
-  requestGyro(event.pointerType === 'touch')
 
   // 聚焦状态下任意按下：先退出聚焦（回到选中前的视角），本次按下不再触发点击
   if (focusedIndex >= 0) {
@@ -1659,9 +1724,11 @@ function init() {
   canvasEl.addEventListener('pointercancel', onPointerCancel)
   canvasEl.addEventListener('pointerleave', onPointerLeave)
   canvasEl.addEventListener('contextmenu', onContextMenu)
-  // 陀螺仪：没有权限接口的浏览器（Android 等）直接挂载；
-  // iOS 要等用户按到画布上时再申请（见 onPointerDown → requestGyro）
+  // 陀螺仪：没有权限接口的浏览器（Android 等）立刻挂载；
+  // iOS 只能等用户手势，所以先挂在 document 上——点地图、点按钮、滑动屏幕都算
   requestGyro(false)
+  document.addEventListener('pointerdown', onAnyGesture, true)
+  document.addEventListener('touchend', onAnyGesture, true)
 
   // 灯光：偏柔和，让白楼干净、水面不产生刺眼高光
   const hemisphere = new THREE.HemisphereLight(0xffffff, 0x223344, 0.6)
@@ -1790,6 +1857,9 @@ function dispose() {
     gyroAttached = false
     gyroBase = null
   }
+  document.removeEventListener('pointerdown', onAnyGesture, true)
+  document.removeEventListener('touchend', onAnyGesture, true)
+  window.clearTimeout(gyroProbeTimer)
 
   composer?.dispose()
   composer = null

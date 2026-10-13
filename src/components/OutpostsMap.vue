@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import AppIcon from './AppIcon.vue'
-import type { BeaconConfig, Venue } from '../types'
+import type { BeaconConfig, GyroStatus, Venue } from '../types'
 
 // three.js 体积不小，异步加载：只有真正翻到这一屏时才会去下地图那一段代码
 const BitnpMap = defineAsyncComponent(() => import('./BitnpMap.vue'))
@@ -22,6 +22,25 @@ const props = defineProps<{
 const mounted = ref(false)
 const selectedId = ref<string | null>(null)
 const hoveredId = ref<string | null>(null)
+const gyroStatus = ref<GyroStatus>('unsupported')
+
+/**
+ * 陀螺仪没生效时给一句可操作的提示。
+ * 触摸端才有意义（PC 用的是鼠标位置），所以只在触屏设备上显示。
+ */
+const gyroHint = computed(() => {
+  const coarse = window.matchMedia('(pointer: coarse)').matches
+  if (!coarse) return ''
+  if (gyroStatus.value === 'needs-gesture') return '轻触屏幕即可启用陀螺仪视角'
+  if (gyroStatus.value === 'blocked') {
+    return '陀螺仪没有数据：iOS 请到「设置 → Safari → 动作与方向访问」打开，然后轻触屏幕重试'
+  }
+  return ''
+})
+
+function onGyroStatus(status: GyroStatus) {
+  gyroStatus.value = status
+}
 
 watch(
   () => props.active,
@@ -100,6 +119,7 @@ function onBeaconClose() {
         :paused="!props.active"
         @beacon-select="onBeaconSelect"
         @beacon-close="onBeaconClose"
+        @gyro-status="onGyroStatus"
       />
       <div v-else class="outposts__idle">
         <AppIcon name="map" size="1.6em" />
@@ -122,9 +142,12 @@ function onBeaconClose() {
         </button>
       </div>
 
-      <p class="outposts__legend hint">
-        移动鼠标（手机上倾斜设备）微调视角 · 点击光柱或上方按钮查看详情
-      </p>
+      <div class="outposts__foot">
+        <p class="outposts__legend hint">
+          移动鼠标（手机上倾斜设备）微调视角 · 点击光柱或上方按钮查看详情
+        </p>
+        <p v-if="gyroHint" class="outposts__gyro">{{ gyroHint }}</p>
+      </div>
     </div>
 
     <Transition name="panel">
@@ -239,12 +262,34 @@ function onBeaconClose() {
   border-color: rgba(255, 210, 74, 0.92);
 }
 
-.outposts__legend {
+.outposts__foot {
   position: absolute;
   left: 14px;
   bottom: 10px;
+  right: 14px;
   z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.outposts__legend {
   color: rgba(255, 255, 255, 0.5);
+}
+
+.outposts__gyro {
+  max-width: 46ch;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 210, 74, 0.35);
+  background: rgba(12, 18, 34, 0.85);
+  color: rgba(255, 210, 74, 0.9);
+  font-size: clamp(0.58rem, 1.35vmin, 0.7rem);
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  align-self: flex-start;
+  backdrop-filter: blur(6px);
 }
 
 /* —— 详情面板 —— */

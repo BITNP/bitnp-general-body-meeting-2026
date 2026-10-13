@@ -17,6 +17,16 @@ export interface BeaconConfig {
   onClick?: (beacon: BeaconConfig) => void
 }
 
+/**
+ * 陀螺仪（视角微动）的可用状态，由 BitnpMap 上报给页面，页面据此决定要不要给提示。
+ *  · unsupported   —— 不适用（PC、浏览器没有该 API）
+ *  · needs-gesture —— iOS 等需要在用户手势里申请权限，还没申请
+ *  · waiting       —— 已开始监听，还没收到第一帧数据
+ *  · active        —— 正常收到数据
+ *  · blocked       —— 权限被拒，或迟迟收不到数据
+ */
+export type GyroStatus = 'unsupported' | 'needs-gesture' | 'waiting' | 'active' | 'blocked'
+
 /* ---------------------------------------------------------------- 主席团 */
 
 export interface Member {

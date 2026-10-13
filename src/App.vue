@@ -28,6 +28,9 @@ let observer: IntersectionObserver | null = null
 
 const activeId = computed(() => slides[index.value].id)
 const isActive = (id: string) => activeId.value === id
+/** 至少露出来一点点的章节（用来决定 3D 地图要不要暂停渲染） */
+const visibleIds = ref<string[]>([])
+const isVisible = (id: string) => visibleIds.value.includes(id)
 
 function setSectionRef(el: unknown, id: string) {
   if (el instanceof HTMLElement) sectionEls.set(id, el)
@@ -117,6 +120,10 @@ function setupObserver() {
         if (id) ratios.set(id, entry.intersectionRatio)
       })
 
+      visibleIds.value = slides
+        .filter((slide) => (ratios.get(slide.id) ?? 0) > 0.02)
+        .map((slide) => slide.id)
+
       const ranked = slides
         .map((slide) => ({ id: slide.id, ratio: ratios.get(slide.id) ?? 0 }))
         .sort((a, b) => b.ratio - a.ratio)
@@ -197,7 +204,10 @@ onBeforeUnmount(() => {
         <CoverSlide v-if="section.id === 'cover'" :active="isActive(section.id)" />
         <MembersSlide v-else-if="section.id === 'members'" />
         <OrgSlide v-else-if="section.id === 'org'" />
-        <VenuesSlide v-else-if="section.id === 'venues'" :active="isActive(section.id)" />
+        <VenuesSlide
+          v-else-if="section.id === 'venues'"
+          :active="isVisible(section.id) || isActive(section.id)"
+        />
         <AssetsSlide v-else-if="section.id === 'assets'" />
         <TimelineSlide v-else-if="section.id === 'timeline'" />
         <PlansSlide v-else-if="section.id === 'plans'" />
