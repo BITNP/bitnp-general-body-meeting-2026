@@ -36,7 +36,7 @@ pnpm preview     # 预览打包结果
   （本地 `dev` 仍然是根路径），CI 里再用 `actions/configure-pages` 的输出覆盖，
   所以**改仓库名、换成自定义域名都不用动代码**；
 - 3D 模型路径本来就用 `import.meta.env.BASE_URL` 拼（`public/model/*.glb`），
-  favicon 走 `%BASE_URL%favicon.svg`，都不会 404；
+  favicon 走 `%BASE_URL%favicon.png`，都不会 404；
 - `public/.nojekyll` 让 Pages 不要用 Jekyll 处理产物。
 
 Pages 默认就是 HTTPS，正好可以用来在手机上测陀螺仪（传感器 API 要求安全上下文）。
@@ -120,7 +120,7 @@ src/
 
 ## 素材来源与移植改动
 
-- 字体 `SmileySans-Oblique.woff2`、`logo.png`、`favicon.svg`：来自 BITNP 官网
+- 字体 `SmileySans-Oblique.woff2`、`logo.png`、`favicon.png`：来自 BITNP 官网
 - `public/model/*.glb`：来自 bitnp-outposts（原来那个办公室视频已经删掉，太占体积）
 - `src/components/BitnpMap.vue` 是从 bitnp-outposts 直接复制的，相对原版只有这几处改动，
   以后同步上游时留意别覆盖掉：
