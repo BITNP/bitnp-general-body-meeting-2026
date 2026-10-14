@@ -44,7 +44,7 @@ const tapeText = `${meeting.association} · 网络无限 开拓不懈 · ${meeti
           </div>
         </dl>
 
-        <p class="hint">← → 或空格翻页 · 底部可以切换「分页 / 连续」模式</p>
+        <!-- <p class="hint">← → 或空格翻页 · 底部可以切换「分页 / 连续」模式</p> -->
       </div>
     </div>
   </section>

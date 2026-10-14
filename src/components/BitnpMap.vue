@@ -58,7 +58,7 @@ const CONTOUR_OPACITY = 0.85
 
 // —— 初始坐标常量 ——
 // 模型初始中心位置（相对原点 / 网格中心）。相机初始位置不再由它决定。
-const INITIAL_COORD = { x: -400, y: 0, z: -300 }
+const INITIAL_COORD = { x: -325, y: 0, z: -300 }
 
 // —— 相机与缩放 ——
 // 相机到原点的初始距离（决定初始缩放）

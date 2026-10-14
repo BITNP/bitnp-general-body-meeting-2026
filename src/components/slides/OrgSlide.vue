@@ -57,7 +57,7 @@ const presidiumSize = presidium.groups[0]?.size ?? ''
 </script>
 
 <template>
-  <section class="slide org">
+  <section class="slide">
     <SlideHeader
       kicker="AGENDA 02"
       title="组织架构"
@@ -109,33 +109,39 @@ const presidiumSize = presidium.groups[0]?.size ?? ''
         </ul>
       </div>
 
-      <aside class="detail surface" :style="{ '--unit-color': selected.color }">
-        <p class="detail__kind">{{ selected.kind }}</p>
-        <h3 class="detail__name">
-          <AppIcon :name="selected.icon" size="1.05em" />
-          <span>{{ selected.name }}</span>
-        </h3>
-        <p class="detail__summary">{{ selected.summary }}</p>
-        <p class="detail__desc">
-          {{ selected.description || '这个单位的介绍待补充（src/data/departments.ts）。' }}
-        </p>
+      <Transition name="detail" mode="out-in">
+        <aside
+          :key="selected.key"
+          class="detail surface"
+          :style="{ '--unit-color': selected.color }"
+        >
+          <p class="detail__kind">{{ selected.kind }}</p>
+          <h3 class="detail__name">
+            <AppIcon :name="selected.icon" size="1.05em" />
+            <span>{{ selected.name }}</span>
+          </h3>
+          <p class="detail__summary">{{ selected.summary }}</p>
+          <p class="detail__desc">
+            {{ selected.description || '这个单位的介绍待补充（src/data/departments.ts）。' }}
+          </p>
 
-        <ul class="detail__groups">
-          <li v-for="group in selected.groups" :key="group.id" class="chip">
-            {{ group.name }} · {{ group.size }}
-          </li>
-        </ul>
+          <ul class="detail__groups">
+            <li v-for="group in selected.groups" :key="group.id" class="chip">
+              {{ group.name }} · {{ group.size }}
+            </li>
+          </ul>
 
-        <p class="detail__plan">
-          <AppIcon name="target" size="0.95em" />
-          <span>
-            {{
-              selected.plan ||
-              '发展规划由各部门自行提供（src/data/departments.ts 的 plan 字段）'
-            }}
-          </span>
-        </p>
-      </aside>
+          <!-- <p class="detail__plan">
+            <AppIcon name="target" size="0.95em" />
+            <span>
+              {{
+                selected.plan ||
+                '发展规划由各部门自行提供（src/data/departments.ts 的 plan 字段）'
+              }}
+            </span>
+          </p> -->
+        </aside>
+      </Transition>
     </div>
   </section>
 </template>
@@ -147,7 +153,8 @@ const presidiumSize = presidium.groups[0]?.size ?? ''
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(260px, 0.85fr);
   gap: clamp(12px, 2vmin, 26px);
-  align-items: stretch;
+  align-items: start;
+  justify-items: center;
 }
 
 /* ============================== 思维导图 ============================== */
@@ -348,7 +355,8 @@ const presidiumSize = presidium.groups[0]?.size ?? ''
 /* ============================== 概况面板 ============================== */
 
 .detail {
-  align-self: stretch;
+  /* align-self: stretch; */
+  width: 100%;
   overflow: auto;
   padding: clamp(14px, 2.2vmin, 26px);
   border-top: 4px solid var(--unit-color);
@@ -400,6 +408,25 @@ const presidiumSize = presidium.groups[0]?.size ?? ''
   font-size: clamp(0.62rem, 1.5vmin, 0.78rem);
   line-height: 1.7;
   color: var(--text-dim);
+}
+
+/* —— 切换单位：旧面板向左位移并淡出，新面板从右侧滑入并淡入 —— */
+.detail-enter-active {
+  transition: opacity 0.26s ease, transform 0.32s cubic-bezier(0.22, 0.68, 0.28, 1);
+}
+
+.detail-leave-active {
+  transition: opacity 0.16s ease, transform 0.2s ease;
+}
+
+.detail-enter-from {
+  opacity: 0;
+  transform: translateX(32px);
+}
+
+.detail-leave-to {
+  opacity: 0;
+  transform: translateX(-26px);
 }
 
 /* ============================== 竖屏 / 窄屏 ============================== */
@@ -458,7 +485,7 @@ const presidiumSize = presidium.groups[0]?.size ?? ''
 
 @media (max-height: 560px) {
   .org {
-    grid-template-columns: minmax(0, 1fr) minmax(240px, 0.75fr);
+    grid-template-columns: 1fr 1fr;
   }
 
   .branch {

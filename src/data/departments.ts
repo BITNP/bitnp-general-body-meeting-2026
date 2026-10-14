@@ -1,10 +1,6 @@
-import type { Department, OrgGroup, PresidiumUnit } from '../types'
+import type { Department, PresidiumUnit } from '../types'
 
 /** 部门内部构成（各部长团 / 普通成员的人数是待补充项） */
-const departmentGroups = (leadNote: string, memberNote: string): OrgGroup[] => [
-  { id: 'leads', name: '部长团', note: leadNote, size: '待补充' },
-  { id: 'members', name: '普通成员', note: memberNote, size: '待补充' },
-]
 
 /** 主席团（组织架构图的根节点） */
 export const presidium: PresidiumUnit = {
@@ -34,7 +30,12 @@ export const departments: Department[] = [
     description:
       '协会最大的技术聚集地，以「技术」为核心，为网协提供技术支持，把技术应用到校园网络生活的方方面面。为全校提供 C 语言讲座，以及网页开发、应用开发等进阶讲座；同时负责全校大型活动的直播推流、录制与后期。',
     plan: '',
-    groups: departmentGroups('部长 / 副部长，负责排课、带项目', '参与例会、课程与项目开发'),
+    groups: [
+      { id: 'leads', name: '部长', note: '部长团', size: '1' },
+      { id: 'vice_leads', name: '副部长', note: '部长团', size: '4' },
+      { id: 'advisors', name: '顾问团', note: '顾问团', size: '2' },
+      { id: 'members', name: '普通成员', note: '普通成员', size: '50' },
+    ],
   },
   {
     id: 'clinic',
@@ -45,7 +46,12 @@ export const departments: Department[] = [
     description:
       '历史悠久的志愿服务部门，面向全校师生提供电脑维修、电脑导购等服务，工作地点在图书馆 311G 与求是社区。每年为新生制作电脑选购指南，也常常前往周边高校开展电脑义诊交流。',
     plan: '',
-    groups: departmentGroups('部长 / 副部长，负责排班与义诊安排', '参与日常值班与上门维修'),
+    groups: [
+      { id: 'leads', name: '部长', note: '部长团', size: '1' },
+      { id: 'vice_leads', name: '副部长', note: '部长团', size: '9' },
+      { id: 'advisors', name: '顾问团', note: '顾问团', size: '2' },
+      { id: 'members', name: '普通成员', note: '普通成员', size: '55' },
+    ],
   },
   {
     id: 'media',
@@ -56,7 +62,12 @@ export const departments: Department[] = [
     description:
       '昵称「树莓」，是协会的协调部门与宣传部门。对内负责事务策划与经济支出管理，对外负责与学校其他组织的合作项目；同时做新媒体运营、设计基础与常用设计软件教学，树莓娘是网协的「颜值担当」。',
     plan: '',
-    groups: departmentGroups('部长 / 副部长，负责策划与对外合作', '参与推送、海报与视频制作'),
+    groups: [
+      { id: 'leads', name: '部长', note: '部长团', size: '1' },
+      { id: 'vice_leads', name: '副部长', note: '部长团', size: '3' },
+      { id: 'advisors', name: '顾问团', note: '顾问团', size: '2' },
+      { id: 'members', name: '普通成员', note: '普通成员', size: '50' },
+    ],
   },
   {
     id: 'support',
@@ -64,8 +75,11 @@ export const departments: Department[] = [
     color: 'var(--dept-support)',
     icon: 'shield',
     summary: '服务运维 · 活动保障 · 应急响应',
-    description: '',
+    description: '主要负责运维工作，部署、维护网协服务器。',
     plan: '',
-    groups: departmentGroups('部长 / 副部长，负责系统与服务保障', '参与运维值班与活动技术保障'),
+    groups: [
+      { id: 'leads', name: '主任', note: '', size: '1' },
+      { id: 'vice_leads', name: '副主任', note: '', size: '17' },
+    ],
   },
 ]

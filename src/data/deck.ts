@@ -6,8 +6,8 @@ export const meeting = {
   associationEn: 'Net Pioneer Association of BIT',
   title: '2026–2027 学年度第一次全体大会',
   slogan: '网络无限 开拓不懈',
-  date: '2026 年 10 月（待定）',
-  place: '待定',
+  date: '2026 年 10 月 17 日',
+  place: '文萃楼 M135',
   host: '主席团',
 }
 

@@ -9,7 +9,7 @@ import { members } from '../../data/members'
     <SlideHeader
       kicker="AGENDA 01"
       title="主席团成员"
-      desc="4 个位置已经排好版：头像、姓名与一段自我介绍。内容填在 src/data/members.ts 里，留空时显示占位框。"
+      desc="网络开拓者协会第30届主席团"
     />
 
     <div class="members__grid">
@@ -27,7 +27,9 @@ import { members } from '../../data/members'
           <p class="member__role">{{ member.role || '职务待补充' }}</p>
         </div>
 
-        <p v-if="member.bio" class="member__bio">{{ member.bio }}</p>
+        <div v-if="member.bio">
+          <span v-for="paragraph in member.bio.split('\n')" class="member__bio">{{ paragraph }}<br></span>
+        </div>
         <div v-else class="empty-slot member__bio member__bio--empty">
           一段自我介绍<br />（负责方向 · 想对大家说的话）
         </div>
