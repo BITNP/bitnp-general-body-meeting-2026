@@ -98,7 +98,7 @@ export const assetItems: AssetItem[] = [
       '协会的 GitHub 组织主页，论文模板、树莓娘系列、破冰小游戏与各类工具都挂在这里；「BITNP」上的更多仓库等你发现。',
     metrics: [
       { label: '组织主页', value: 'github.com/BITNP' },
-      { label: '开源仓库', value: '10+ 个' },
+      { label: '开源仓库', value: '100+ 个' },
     ],
     tags: ['开源', '组织主页'],
     href: 'https://github.com/BITNP',
