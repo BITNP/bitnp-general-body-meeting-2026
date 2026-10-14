@@ -75,7 +75,7 @@ const presidiumSize = presidium.groups[0]?.size ?? ''
           <span class="node__icon"><AppIcon :name="presidium.icon" size="1.05em" /></span>
           <span class="node__text">
             <span class="node__name">{{ presidium.name }}</span>
-            <span class="node__meta">{{ presidiumSize }} 人 · 统筹协调</span>
+            <!-- <span class="node__meta">{{ presidiumSize }} 人 · 统筹协调</span> -->
           </span>
         </button>
 
@@ -95,7 +95,7 @@ const presidiumSize = presidium.groups[0]?.size ?? ''
               <span class="node__icon"><AppIcon :name="dept.icon" size="1em" /></span>
               <span class="node__text">
                 <span class="node__name">{{ dept.name }}</span>
-                <span class="node__meta">{{ dept.summary }}</span>
+                <!-- <span class="node__meta">{{ dept.summary }}</span> -->
               </span>
             </button>
 

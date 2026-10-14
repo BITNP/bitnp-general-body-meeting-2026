@@ -12,7 +12,7 @@ import TimelineSlide from './components/slides/TimelineSlide.vue'
 import PlansSlide from './components/slides/PlansSlide.vue'
 import ClosingSlide from './components/slides/ClosingSlide.vue'
 import { meeting, slides } from './data/deck'
-import logoUrl from './assets/logo.png'
+import { useThemeLogo } from './composables/useThemeLogo'
 
 /**
  * 外壳：整页从上往下滚动（像官网一样），左侧是章节侧栏。
@@ -21,6 +21,8 @@ import logoUrl from './assets/logo.png'
  */
 const index = ref(0)
 const sidebarOpen = ref(false)
+/** 亮暗主题各一张 logo（见 composables/useThemeLogo.ts） */
+const logoUrl = useThemeLogo()
 
 const sectionEls = new Map<string, HTMLElement>()
 const ratios = new Map<string, number>()

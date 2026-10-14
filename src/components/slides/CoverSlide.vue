@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import TapeEffect from '../TapeEffect.vue'
-import logoUrl from '../../assets/logo.png'
 import { meeting } from '../../data/deck'
+import { useThemeLogo } from '../../composables/useThemeLogo'
 
 /** 封面不是当前页时，胶带动画会暂停（省电） */
 const props = withDefaults(defineProps<{ active?: boolean }>(), { active: true })
 
 const tapeText = `${meeting.association} · 网络无限 开拓不懈 · ${meeting.associationEn} · `
+/** 亮暗主题各一张 logo（见 composables/useThemeLogo.ts） */
+const logoUrl = useThemeLogo()
 </script>
 
 <template>

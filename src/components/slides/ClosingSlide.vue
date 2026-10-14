@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import AppIcon from '../AppIcon.vue'
-import logoUrl from '../../assets/logo.png'
 import { meeting } from '../../data/deck'
+import { useThemeLogo } from '../../composables/useThemeLogo'
+
+/** 亮暗主题各一张 logo（见 composables/useThemeLogo.ts） */
+const logoUrl = useThemeLogo()
 </script>
 
 <template>

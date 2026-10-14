@@ -358,7 +358,7 @@ function readPalette() {
     border: read('--border', '#eaeaea'),
     text: read('--text', '#333333'),
     textDim: read('--text-dim', '#6b6375'),
-    font: getComputedStyle(document.body).fontFamily || 'sans-serif',
+    font: `'SmileySans', ${getComputedStyle(document.body).fontFamily || 'sans-serif'}`,
   }
 
   categoryColors = {}
@@ -370,6 +370,14 @@ function readPalette() {
 
   wrapCache = new Map()
 }
+
+/**
+ * 画布上的字体串：`ctx.font` 只认字体族名（CSS 变量和 @font-face 别名在这里都要手写），
+ * 所以第一顺位显式写项目主题字体 SmileySans，后面接页面正文字体兜底
+ * （SmileySans 里没有的字按字回退，和 DOM 里的表现一致）。
+ * 字体只有 oblique 单字重，600 / 700 会匹配到同一个 face，粗细看起来一样。
+ */
+const fontOf = (weight: number, fontSize: number) => `oblique ${weight} ${fontSize}px ${palette.font}`
 
 /** #rrggbb / #rgb → rgba(...)，给描边和底色用 */
 function withAlpha(color: string, alpha: number) {
@@ -452,7 +460,7 @@ function cardsFor(
   const cached = wrapCache.get(key)
   if (cached) return cached
 
-  ctx.font = `600 ${fontSize}px ${palette.font}`
+  ctx.font = fontOf(600, fontSize)
   const lineHeight = lineHeightOf(fontSize)
   const cards = texts.map((text) => {
     const lines = wrapLines(ctx, text, width - padX * 2)
@@ -715,7 +723,7 @@ function paint() {
     ctx.strokeStyle = active ? accent : withAlpha(accent, 0.45)
     ctx.stroke()
 
-    ctx.font = `${active ? 700 : 600} ${fontSize}px ${palette.font}`
+    ctx.font = fontOf(active ? 700 : 600, fontSize)
     ctx.textBaseline = 'middle'
     ctx.textAlign = 'center'
     ctx.fillStyle = ring === 'cat' ? accent : palette.text
@@ -966,6 +974,17 @@ onMounted(() => {
   }
   window.addEventListener('resize', paint)
   paint()
+
+  /*
+   * 字体（SmileySans 是个 1.3MB 的 woff2）是异步加载的：就绪之前量到的是后备字体的宽度，
+   * 折行结果和卡片高度都会跟着算错。等它加载完再清一次折行缓存、按真实字体重排。
+   */
+  document.fonts?.ready
+    .then(() => {
+      wrapCache = new Map()
+      paint()
+    })
+    .catch(() => undefined)
 })
 
 onBeforeUnmount(() => {

@@ -111,7 +111,8 @@ src/
 ├─ types.ts                 # 内容模型 + BeaconConfig（地图组件的入参，勿改）
 ├─ data/                    # 所有正文内容
 ├─ composables/
-│  └─ useMediaQuery.ts      # 响应式断点（时间轴横竖切换用）
+│  ├─ useMediaQuery.ts      # 响应式断点（时间轴横竖切换用）
+│  └─ useThemeLogo.ts       # 亮暗主题各一张 logo（顶栏 / 封面 / 结束页用）
 └─ components/
    ├─ BitnpMap.vue          # 从 bitnp-outposts 移植的 3D 地图（见下方「移植改动」）
    ├─ OutpostsMap.vue       # 地图 + 据点按钮（悬停高亮 / 点击聚焦）+ 详情面板
@@ -126,7 +127,7 @@ src/
 
 ## 素材来源与移植改动
 
-- 字体 `SmileySans-Oblique.woff2`、`logo.png`、`favicon.png`：来自 BITNP 官网
+- 字体 `SmileySans-Oblique.woff2`、`logo.png`（亮色）、`logo-dark.png`（暗色）、`favicon.png`：来自 BITNP 官网
 - `public/model/*.glb`：来自 bitnp-outposts（原来那个办公室视频已经删掉，太占体积）
 - `src/components/BitnpMap.vue` 是从 bitnp-outposts 直接复制的，相对原版只有这几处改动，
   以后同步上游时留意别覆盖掉：
