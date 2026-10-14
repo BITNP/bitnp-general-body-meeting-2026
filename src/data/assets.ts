@@ -198,7 +198,7 @@ export const assetItems: AssetItem[] = [
     name: '网协 GitLab',
     summary: '自建代码托管（校园网内访问）',
     description:
-      '协会自建的 GitLab，仅校园网内访问，用来承载不方便放到公网上的仓库。',
+      '协会自建的 GitLab，仅校园网内访问，用来承载不方便放到公网上的仓库。（曾经是GitLab，现在已更新为Forgejo）',
     metrics: [
       { label: '地址', value: 'git.bitnp.net' },
       { label: '访问范围', value: '校园网内' },

@@ -12,7 +12,7 @@ const isVertical = useMediaQuery('(max-width: 768px) and (min-height: 561px)')
     <SlideHeader
       kicker="AGENDA 05"
       title="接下来一年"
-      desc="从开学到换届，一年的重要节点都在这条时间轴上。内容在 src/data/timeline.ts，确认后把「待确认」的条目替换掉即可。"
+      desc="从开学到换届，一年的重要节点都在这条时间轴上。"
     >
       <template #side>
         <span class="chip">2026.09 – 2027.08</span>

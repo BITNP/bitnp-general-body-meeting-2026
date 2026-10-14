@@ -9,11 +9,11 @@ import { departments } from '../../data/departments'
     <SlideHeader
       kicker="AGENDA 06"
       title="各部门发展规划"
-      desc="这一页留给各部门自己讲：把计划填进 src/data/departments.ts 的 plan 字段，占位框会自动换成正文。"
+      desc="由各部门部长介绍。"
     />
 
     <div class="plans__grid">
-      <article
+      <!-- <article
         v-for="dept in departments"
         :key="dept.id"
         class="plan surface"
@@ -28,7 +28,7 @@ import { departments } from '../../data/departments'
         <div v-else class="empty-slot plan__body">
           本部门发展规划<br />（由部门自行提供）
         </div>
-      </article>
+      </article> -->
     </div>
   </section>
 </template>

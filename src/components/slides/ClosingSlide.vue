@@ -15,7 +15,7 @@ const logoUrl = useThemeLogo()
       <h2 class="closing__title">谢谢大家</h2>
       <p class="closing__slogan">{{ meeting.slogan }}</p>
 
-      <div class="closing__panels">
+      <!-- <div class="closing__panels">
         <article class="closing__panel surface">
           <h3 class="closing__panel-title">
             <AppIcon name="pin" size="1em" />
@@ -38,7 +38,7 @@ const logoUrl = useThemeLogo()
           </ul>
           <p class="closing__note">公众号、B 站、新生群等入口待补充。</p>
         </article>
-      </div>
+      </div> -->
     </div>
   </section>
 </template>
