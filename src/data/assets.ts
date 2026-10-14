@@ -1,25 +1,29 @@
 import type { AssetCategory, AssetItem } from '../types'
 
 /**
- * 数字资产 —— 左侧选分类、右侧选条目，选中后在右侧面板展示详情。
+ * 数字资产 —— 内容整理自仓库根目录的 assets.md。
  *
- * 下面按官网 / 仓库里能查到的信息填了骨架，
- * 标着「待补充」的数据（粉丝数、访问量……）请会前补齐；
- * 增删条目只改这个文件即可。
+ * 结构说明：
+ *  · assetCategories = 转盘内圈（4 个分类）
+ *  · assetItems = 转盘外圈。外圈是一条"按分类顺序摊平"的连续条目带，
+ *    所以数组顺序就是展示顺序：先第一个分类的所有条目，再第二个分类……
+ *  · 条目上的 href 只填公网可访问的地址；「校园网内访问」的内部系统
+ *    把地址写在 metrics 里，不填 href（点出去也打不开）
+ *  · 详情页的关键数据、状态标记都来自这里；要改内容只改这个文件
  */
 
 export const assetCategories: AssetCategory[] = [
   {
     id: 'social',
     name: '官方媒体账号',
-    description: '对外发声的窗口：公众号、B 站、新生群……',
+    description: '对外发声的窗口：微信公众号、B 站官号与 QQ 咨询群',
     color: 'var(--dept-chairman)',
     icon: 'megaphone',
   },
   {
     id: 'opensource',
     name: '开源仓库与项目',
-    description: '托管在 GitHub 上、人人可用可改的代码与文档',
+    description: '托管在 GitHub / GitLab 上、人人可用可改的代码与文档',
     color: 'var(--dept-tech)',
     icon: 'github',
   },
@@ -32,8 +36,8 @@ export const assetCategories: AssetCategory[] = [
   },
   {
     id: 'ip',
-    name: '吉祥物与美术 IP',
-    description: '树莓娘与一整套视觉资产',
+    name: '设计资源与美术 IP',
+    description: '树莓娘，以及一整套设计资源',
     color: 'var(--dept-media)',
     icon: 'sparkles',
   },
@@ -44,218 +48,305 @@ export const assetItems: AssetItem[] = [
   {
     id: 'wechat',
     category: 'social',
-    name: '微信公众号「BITNP网络开拓者协会」',
-    summary: '活动推送、服务公告与招新信息的主阵地',
+    name: '微信公众号「NetPioneer」',
+    summary: '活动宣传与推送的主阵地',
     description:
-      '协会对外的第一窗口。技术分享会的预告与回顾、电脑诊所的服务公告、招新信息都会在这里发布，由数字媒体中心负责运营与排版。',
+      '微信搜索「NetPioneer」即可找到。协会的活动宣传、推送与日常动态都在这里发布，是协会对外的第一窗口。',
     metrics: [
-      { label: '关注人数', value: '待补充' },
-      { label: '更新频率', value: '待补充' },
+      { label: '公众号', value: 'NetPioneer' },
+      { label: '主要内容', value: '活动宣传推送' },
     ],
-    tags: ['推送', '招新', '服务公告'],
+    tags: ['推送', '活动宣传'],
     status: '持续运营',
   },
   {
     id: 'bilibili',
     category: 'social',
-    name: 'B 站账号',
-    summary: '技术分享会录播、活动直播与宣传视频',
+    name: 'B 站「网络开拓者」',
+    summary: '活动直播、录像，以及未来的更多视频',
     description:
-      '技术分享会的录播、活动宣传片、直播回放都放在这里，也是 NPLive 之外的第二分发渠道。账号 ID 与主页链接待补充。',
+      '协会 B 站官号。目前还是 3 级小号，还需努力运营～会进行活动直播、发布活动录像，未来也可能发布更多种类的视频。',
     metrics: [
-      { label: '粉丝数', value: '待补充' },
-      { label: '投稿数', value: '待补充' },
+      { label: '账号等级', value: '3 级' },
+      { label: '内容形式', value: '直播 · 录像' },
     ],
-    tags: ['视频', '录播', '宣传'],
+    tags: ['视频', '直播', '录播'],
+    href: 'https://space.bilibili.com/89756733',
     status: '持续运营',
   },
   {
     id: 'qq-group',
     category: 'social',
-    name: '新生咨询群 / 会员群',
-    summary: '招新季答疑与日常交流的聚集地',
+    name: 'QQ 咨询群',
+    summary: '绿群答疑报障 · 黑群选购咨询',
     description:
-      '招新期间最主要的答疑渠道，也是日常技术交流、活动召集的地方。群号与群规模待补充。',
+      '绿群：线上咨询电脑问题和故障相关事宜，线下预约见 i 北理「电脑义诊」模块；黑群：咨询电脑及相关电子产品选购相关事宜。',
     metrics: [
-      { label: '群成员', value: '待补充' },
-      { label: '主要用途', value: '答疑 · 交流' },
+      { label: '绿群（答疑报障）', value: '936335415' },
+      { label: '黑群（选购咨询）', value: '824722253' },
     ],
     tags: ['答疑', '社群'],
   },
 
   /* --------------------------------------------------------- 开源仓库与项目 */
   {
+    id: 'github-org',
+    category: 'opensource',
+    name: 'BITNP GitHub 组织',
+    summary: '协会所有开源仓库的入口',
+    description:
+      '协会的 GitHub 组织主页，论文模板、树莓娘系列、破冰小游戏与各类工具都挂在这里；「BITNP」上的更多仓库等你发现。',
+    metrics: [
+      { label: '组织主页', value: 'github.com/BITNP' },
+      { label: '开源仓库', value: '10+ 个' },
+    ],
+    tags: ['开源', '组织主页'],
+    href: 'https://github.com/BITNP',
+    status: '持续维护',
+  },
+  {
     id: 'bithesis',
     category: 'opensource',
-    name: 'BITHESIS',
-    summary: '北京理工大学学位论文 LaTeX 模板集合',
+    name: 'BIThesis',
+    summary: 'LaTeX 论文排版模板',
     description:
-      '非官方 LaTeX 模板集合，包含本科、研究生毕业设计模板及更多，是协会影响力最大的开源项目之一，服务范围早已超出协会本身。',
+      '北京理工大学学位论文 LaTeX 模板，含本科与研究生模板、配套 Wiki 与在线文档站，是协会影响力最大的开源项目之一，服务范围早已超出协会本身。',
     metrics: [
-      { label: '模板数量', value: '待补充' },
-      { label: 'Star 数', value: '待补充' },
+      { label: '在线文档', value: 'bithesis.bitnp.net' },
+      { label: '配套仓库', value: 'BIThesis-wiki' },
     ],
     tags: ['LaTeX', '毕业论文', '对外开源'],
     href: 'https://bithesis.bitnp.net/',
     status: '持续维护',
   },
   {
-    id: 'website',
+    id: 'raspberry-vtuber',
     category: 'opensource',
-    name: 'BITNP_Website',
-    summary: '协会官网（Astro + 纯 CSS，静态生成）',
+    name: '树莓娘 AI 虚拟主播',
+    summary: '让树莓娘「活」起来的直播系统',
     description:
-      '协会门户：新闻、博客、服务入口与部门介绍。整套设计语言（配色、字体、亮暗模式、卡片与胶带装饰）也被本次大会展示页沿用。',
+      '由声音、调度、前端、拾音四个仓库组成的树莓娘 AI 虚拟主播系统，是「用技术给树莓娘创造存在形态」的主要尝试。',
     metrics: [
-      { label: '技术栈', value: 'Astro' },
-      { label: '维护状态', value: '待补充' },
+      { label: '仓库数', value: '4 个' },
+      { label: '组成', value: '声音 · 调度 · 前端 · 拾音' },
     ],
-    tags: ['官网', '前端'],
-    href: 'https://bitnp.net/',
+    tags: ['虚拟主播', 'AI', '树莓娘'],
+    href: 'https://github.com/BITNP/bitnp-raspberrygirl-vtuber-orchestrator',
+    status: '开发中',
   },
   {
-    id: 'outposts',
+    id: 'raspberry-agent',
     category: 'opensource',
-    name: 'bitnp-outposts',
-    summary: '据点位置的交互式 3D 展示组件（Three.js）',
-    description:
-      '把良乡校区模型做成可旋转、可缩放的 3D 场景，用光柱标注办公室与两个电脑诊所。本次大会「活动场地」一页用的就是这个组件。',
-    metrics: [
-      { label: '技术栈', value: 'Vue + Three.js' },
-      { label: '标注据点', value: '3' },
-    ],
-    tags: ['3D', '地图', '组件'],
+    name: '树莓娘 QQ 智能体',
+    summary: '跑在 QQ 里的树莓娘',
+    description: '树莓娘 QQ 智能体：让吉祥物能直接进群聊和大家互动。',
+    metrics: [{ label: '仓库', value: 'miss-raspberry-agent' }],
+    tags: ['智能体', '树莓娘'],
+    href: 'https://github.com/BITNP/miss-raspberry-agent',
   },
   {
-    id: 'more-repos',
+    id: 'raspberry-toolkit',
     category: 'opensource',
-    name: '组织下的其他仓库',
-    summary: '各类校园工具、脚本与实验性项目',
+    name: '树莓娘工具箱',
+    summary: '计算机底层信息与性能指标获取工具',
+    description: '获取计算机底层信息与性能指标的小工具，也是树莓娘系列项目的基础设施之一。',
+    metrics: [{ label: '仓库', value: 'miss-raspberry-toolkit' }],
+    tags: ['工具', '树莓娘'],
+    href: 'https://github.com/BITNP/miss-raspberry-toolkit',
+  },
+  {
+    id: 'raspberry-pet',
+    category: 'opensource',
+    name: '树莓娘桌宠',
+    summary: '用视频生成 AI 做准二游级 UI 动画',
+    description: '树莓娘桌宠初版：利用视频生成 AI 制作准二游级 UI 动画的一次实践尝试。',
+    metrics: [{ label: '仓库', value: 'bitnp-desktop-pet' }],
+    tags: ['桌宠', 'AI 生成'],
+    href: 'https://github.com/BITNP/bitnp-desktop-pet',
+  },
+  {
+    id: 'badges',
+    category: 'opensource',
+    name: '虚拟纪念章分发',
+    summary: '基于数字签名技术的纪念章系统',
     description:
-      'GitHub 组织 BITNP 下还有若干工具与实验项目（自动签到、数据同步、课程资料等）。完整清单与各仓库说明待补充。',
+      '基于数字签名技术的虚拟纪念章分发与验证系统，线上验证页部署在 www-backup.bitnp.net/bitnp-badges。',
     metrics: [
-      { label: '仓库总数', value: '待补充' },
-      { label: '组织主页', value: 'github.com/BITNP' },
+      { label: '仓库', value: 'bitnp-badges' },
+      { label: '验证页', value: 'www-backup.bitnp.net' },
     ],
-    tags: ['工具', '脚本'],
-    href: 'https://github.com/BITNP',
+    tags: ['数字签名', '纪念章'],
+    href: 'https://github.com/BITNP/bitnp-badges',
+  },
+  {
+    id: 'icebreaker',
+    category: 'opensource',
+    name: '破冰小游戏与工具箱',
+    summary: '技术部破冰活动用的小游戏与工具',
+    description:
+      '技术部破冰小游戏与破冰工具箱，含单词对战、着色器玩具与破冰工具箱等一批仓库。',
+    metrics: [
+      { label: '仓库数', value: '3 个' },
+      { label: '用途', value: '部门破冰活动' },
+    ],
+    tags: ['小游戏', '技术部'],
+    href: 'https://github.com/BITNP/tech-icebreaker-2026',
+  },
+  {
+    id: 'gitlab',
+    category: 'opensource',
+    name: '网协 GitLab',
+    summary: '自建代码托管（校园网内访问）',
+    description:
+      '协会自建的 GitLab，仅校园网内访问，用来承载不方便放到公网上的仓库。',
+    metrics: [
+      { label: '地址', value: 'git.bitnp.net' },
+      { label: '访问范围', value: '校园网内' },
+    ],
+    tags: ['GitLab', '内网'],
   },
 
   /* ----------------------------------------------------- 校园服务与内部系统 */
   {
-    id: 'nplive',
+    id: 'clinic-booking',
     category: 'services',
-    name: 'NPLive 直播平台',
-    summary: '网络开拓者维护的校内直播平台',
+    name: '电脑义诊预约',
+    summary: 'i 北理里的线上预约入口',
     description:
-      '为全校大型活动提供直播推流、录制与后期服务。技术部负责现场保障，是协会在校园里存在感最强的服务之一。',
+      '在 i 北理 → 工作台最下面（IT 服务）→ 电脑义诊，即可预约线下维修服务。',
     metrics: [
-      { label: '年服务场次', value: '待补充' },
-      { label: '访问量', value: '待补充' },
+      { label: '入口', value: 'i 北理 · IT 服务' },
+      { label: '服务部门', value: '电脑诊所' },
     ],
-    tags: ['直播', '校级活动'],
-    href: 'https://live.bitnp.net/',
-    status: '持续运营',
+    tags: ['预约', '电脑诊所'],
   },
   {
-    id: 'network-guide',
+    id: 'website',
     category: 'services',
-    name: '校园网使用指南',
-    summary: '校园网充值 · 连接 · 常见问题一站式指引',
+    name: '网协官网',
+    summary: '协会门户：新闻、服务入口与部门介绍',
     description:
-      '面向全校新生的校园网使用说明：充值流程、无线与有线连接方式、认证步骤、常见故障排查，常年是官网访问量最高的页面之一。',
-    metrics: [
-      { label: '覆盖场景', value: 'PC · 移动端' },
-      { label: '年访问量', value: '待补充' },
-    ],
-    tags: ['指南', '校园网'],
+      '协会官网，新闻、博客、服务入口与部门介绍都汇集在这里；本次大会展示页的设计语言也来自官网。',
+    metrics: [{ label: '地址', value: 'www.bitnp.net' }],
+    tags: ['官网', '门户'],
+    href: 'https://www.bitnp.net/',
   },
   {
-    id: 'pc-guide',
+    id: 'passport',
     category: 'services',
-    name: '电脑推荐表（电脑诊所）',
-    summary: '每年更新的新生电脑选购指南',
+    name: '网协通行证',
+    summary: '统一身份认证与鉴权',
     description:
-      '电脑诊所每年为新生整理的选购参考：按预算与用途分类，给出机型推荐与选购建议，已连续更新多年。',
+      '网协统一身份认证中心，为内部服务提供登录与鉴权，仅校园网内访问。',
     metrics: [
-      { label: '更新周期', value: '每年' },
-      { label: '最新版本', value: '2026 版' },
+      { label: '地址', value: 'accounts.bitnp.net' },
+      { label: '访问范围', value: '校园网内' },
     ],
-    tags: ['导购', '新生'],
+    tags: ['认证', '内网'],
+    status: '内部系统',
   },
   {
-    id: 'clinic-service',
+    id: 'guild',
     category: 'services',
-    name: '电脑诊所义诊服务',
-    summary: '面向全校师生的电脑维修受理',
+    name: '开拓者公会',
+    summary: '项目进度看板',
     description:
-      '线上答疑加线下坐诊：软件安装、硬件加装与更换、系统重装、网络诊断等。线下据点见「活动场地」一页。',
+      '新上线的项目进度看板，让协会信息更透明，也方便跨部门协作，仅校园网内访问。',
     metrics: [
-      { label: '服务地点', value: '图书馆 311G · 求是社区' },
-      { label: '年服务人次', value: '待补充' },
+      { label: '地址', value: 'home.bitnp.net' },
+      { label: '用途', value: '项目进度看板' },
     ],
-    tags: ['维修', '志愿服务'],
+    tags: ['看板', '协作'],
+    status: '内部系统',
   },
   {
-    id: 'internal',
+    id: 'clinic-admin',
     category: 'services',
-    name: '内部系统与基础设施',
-    summary: '协会自用的账号、文档、监控等系统',
+    name: '诊所后台',
+    summary: '电脑义诊工单管理',
     description:
-      '支撑协会日常运转的内部系统：成员与权限管理、共享文档、服务监控与告警、素材库等。清单待技术保障中心补充。',
+      '电脑诊所的工单管理系统，仅电脑诊所有权限，校园网内访问。',
     metrics: [
-      { label: '系统数量', value: '待补充' },
-      { label: '负责部门', value: '技术保障中心' },
+      { label: '地址', value: 'clinic.bitnp.net' },
+      { label: '权限', value: '仅电脑诊所' },
     ],
-    tags: ['内部', '运维'],
+    tags: ['工单', '电脑诊所'],
+    status: '内部系统',
+  },
+  {
+    id: 'clinic-wiki',
+    category: 'services',
+    name: '诊所 Wiki',
+    summary: '电脑维修知识库',
+    description:
+      '电脑诊所的维修知识库，沉淀常见故障与处理流程，校园网内访问。',
+    metrics: [{ label: '地址', value: 'wiki.bitnp.net' }],
+    tags: ['知识库', '电脑诊所'],
+    status: '内部系统',
+  },
+  {
+    id: 'contest',
+    category: 'services',
+    name: '新生国防知识竞赛',
+    summary: '军训期间开放',
+    description: '新生国防知识竞赛系统，校园网内访问，仅军训时开放。',
+    metrics: [
+      { label: '地址', value: 'contest.bitnp.net' },
+      { label: '开放时间', value: '军训期间' },
+    ],
+    tags: ['竞赛', '新生'],
+  },
+  {
+    id: 'blog',
+    category: 'services',
+    name: '网协 Blog',
+    summary: '协会博客园',
+    description: '协会博客，发布技术文章与活动记录。',
+    metrics: [{ label: '地址', value: 'blog.bitnp.net' }],
+    tags: ['博客', '内容'],
+    href: 'https://blog.bitnp.net/',
+  },
+  {
+    id: 'cloud',
+    category: 'services',
+    name: '网协文件云盘',
+    summary: '义诊与活动文件资源',
+    description:
+      '协会文件云盘，存放电脑义诊以及网协活动相关的文件资源。',
+    metrics: [
+      { label: '地址', value: 'cf.bitnp.net' },
+      { label: '存放内容', value: '义诊 · 活动文件' },
+    ],
+    tags: ['云盘', '文件'],
   },
 
-  /* --------------------------------------------------------- 吉祥物与美术 IP */
+  /* --------------------------------------------------------- 设计资源与美术 IP */
   {
     id: 'raspberry-girl',
     category: 'ip',
     name: '树莓娘',
-    summary: '协会吉祥物，数字媒体中心的「颜值担当」',
+    summary: '协会吉祥物',
     description:
-      '树莓娘是网协的官方形象，出现在海报、周边、活动物料与社交账号头像上。设定、形象版本与授权规范待数字媒体中心补充。',
+      '网络开拓者协会吉祥物。我们正致力于利用各种技术，为树莓娘创造存在形态与传奇故事！',
     metrics: [
-      { label: '首次登场', value: '待补充' },
-      { label: '形象版本', value: '待补充' },
+      { label: '身份', value: '协会吉祥物' },
+      { label: '衍生项目', value: '虚拟主播 · 智能体 · 桌宠' },
     ],
-    tags: ['吉祥物', '海报'],
+    tags: ['吉祥物', '树莓娘'],
+    status: '长期项目',
   },
   {
-    id: 'stickers',
+    id: 'design-assets',
     category: 'ip',
-    name: '表情包与素材库',
-    summary: '日常聊天与推送配图用的系列表情',
-    description: '基于树莓娘衍生的表情包、贴纸与推送配图素材库。当前数量与获取方式待补充。',
-    metrics: [
-      { label: '表情数量', value: '待补充' },
-      { label: '使用场景', value: '社群 · 推送' },
-    ],
-    tags: ['表情包', '素材'],
-  },
-  {
-    id: 'brand',
-    category: 'ip',
-    name: 'LOGO 与视觉规范',
-    summary: '徽标、标准色、字体与使用规范',
+    name: '设计资源库',
+    summary: '树莓娘形象与整套设计素材',
     description:
-      '协会圆形徽标与整套视觉规范：标准色（主色 #d97319）、标题字体（得意黑 SmileySans）、图标与版式约定。规范文档待整理。',
+      '协会设计资源仓库，收纳树莓娘形象、视觉规范等各类设计素材，欢迎自取使用。',
     metrics: [
-      { label: '主色', value: '#d97319' },
-      { label: '标题字体', value: 'SmileySans' },
+      { label: '仓库', value: 'bitnp-design' },
+      { label: '内容', value: '形象 · 视觉素材' },
     ],
-    tags: ['LOGO', '设计规范'],
-  },
-  {
-    id: 'merch',
-    category: 'ip',
-    name: '周边与徽章',
-    summary: '面向成员的实体周边',
-    description: '徽章、贴纸、文化衫等实体周边。品类与库存情况待补充。',
-    metrics: [{ label: '品类数', value: '待补充' }],
-    tags: ['周边'],
+    tags: ['设计', '素材'],
+    href: 'https://github.com/BITNP/bitnp-design',
   },
 ]
