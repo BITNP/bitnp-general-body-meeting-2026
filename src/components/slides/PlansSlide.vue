@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import AppIcon from '../AppIcon.vue'
 import SlideHeader from '../SlideHeader.vue'
-import { departments } from '../../data/departments'
 </script>
 
 <template>

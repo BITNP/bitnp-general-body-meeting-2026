@@ -53,7 +53,7 @@ const units: Unit[] = [
 
 const selectedKey = ref('presidium')
 const selected = computed(() => units.find((unit) => unit.key === selectedKey.value) ?? units[0])
-const presidiumSize = presidium.groups[0]?.size ?? ''
+// const presidiumSize = presidium.groups[0]?.size ?? ''
 </script>
 
 <template>

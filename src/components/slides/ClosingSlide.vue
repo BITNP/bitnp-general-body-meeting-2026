@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import AppIcon from '../AppIcon.vue'
 import { meeting } from '../../data/deck'
 import { useThemeLogo } from '../../composables/useThemeLogo'
 
