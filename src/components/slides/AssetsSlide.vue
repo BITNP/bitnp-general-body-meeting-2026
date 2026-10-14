@@ -72,6 +72,9 @@ const SLICE_GAP = 6
 const ITEM_STEP = 90
 /** 外圈绘制/命中的窗口：以当前选中项为中心，前后各留几张 */
 const ITEM_WINDOW = 2
+/** 拖动灵敏度：鼠标离圆心远，一点位移换算出的转角很小，所以给个增益 */
+const MOUSE_DRAG_GAIN = 2
+const TOUCH_DRAG_GAIN = 1.5
 /** 补间时长 */
 const TWEEN_MS = 420
 
@@ -221,37 +224,68 @@ function wrap180(degrees: number) {
   return ((((degrees + 180) % 360) + 360) % 360) - 180
 }
 
-/** 某张卡片此刻相对基准方向偏了多少度 */
+/** 条目带当前位置（单位：格），由转动角换算 */
+const beltOf = (ring: RingName) => -rotation[ring] / stepOf(ring)
+
+/**
+ * 某张卡片此刻相对基准方向偏了多少度。
+ * 注意要按"条目带的差（取模条目数）"来算，而不是 index × 每格角度：
+ * 条目带很长、格子很疏，直接乘会让远端绕回来和近端落在同一个角度上
+ * （典型表现就是停在第一个条目时，旁边的标签显示成了整条带的最后一条）。
+ */
 function offsetOf(ring: RingName, index: number) {
-  return wrap180(index * stepOf(ring) + rotation[ring])
+  const count = ringList(ring).length
+  if (count === 0) return 0
+  let diff = index - beltOf(ring)
+  diff -= Math.round(diff / count) * count
+  return wrap180(diff * stepOf(ring))
 }
 
 /** 离基准方向最近的那张卡片 = 当前选中项 */
 function nearestIndex(ring: RingName) {
   const count = ringList(ring).length
   if (count === 0) return 0
-  const steps = -Math.round(rotation[ring] / stepOf(ring))
-  return ((steps % count) + count) % count
+  return ((Math.round(beltOf(ring)) % count) + count) % count
 }
 
 /* -------------------------------- 补间 -------------------------------- */
 
-/** 让某张卡片对正基准方向（取离当前角度最近的那个等价角） */
-function alignmentFor(ring: RingName, index: number) {
-  const base = -index * stepOf(ring)
-  return base + 360 * Math.round((rotation[ring] - base) / 360)
+/** 是否闭合圆环：每格角度 × 卡片数 = 360（内圈是，外圈那条长条目带不是） */
+const isClosedRing = (ring: RingName) => Math.abs(stepOf(ring) * ringList(ring).length - 360) < 0.001
+
+/**
+ * 平滑滑到"让第 index 张卡片对正"的位置：
+ *  · 闭合圆环（内圈）：取离当前角度最近的等价角，转得最短；
+ *  · 条目带（外圈）：必须转到"带的位置正好等于 index"的那个角度——
+ *    否则带会和选中项差出整数圈，下次一拖就跳。差得太远（键盘直接跳到很远的条目）
+ *    就直接到位，不做长距离甩动。
+ */
+function alignTween(ring: RingName, index: number) {
+  const exact = -index * stepOf(ring)
+  if (isClosedRing(ring)) {
+    startTween(ring, exact + 360 * Math.round((rotation[ring] - exact) / 360))
+    return
+  }
+  if (Math.abs(exact - rotation[ring]) > 360) {
+    delete tweens[ring]
+    rotation[ring] = exact
+    schedulePaint()
+    return
+  }
+  startTween(ring, exact)
 }
 
 const wrapIndex = (index: number, count: number) => (count > 0 ? ((index % count) + count) % count : 0)
 
 /** 选中某条条目：外圈对正它，内圈跟着转到它所属的分类 */
 function selectItem(index: number) {
-  const entry = flatItems[wrapIndex(index, flatItems.length)]
+  const target = wrapIndex(index, flatItems.length)
+  const entry = flatItems[target]
   if (!entry) return
   activeItemId.value = entry.item.id
   activeCategoryId.value = entry.category.id
-  startTween('item', alignmentFor('item', flatItems.indexOf(entry)))
-  startTween('cat', alignmentFor('cat', categoryIndexOf(entry.category.id)))
+  alignTween('item', target)
+  alignTween('cat', categoryIndexOf(entry.category.id))
 }
 
 /** 选中某个分类：内圈对正它，外圈滑到该分类的第一条 */
@@ -262,8 +296,8 @@ function selectCategory(index: number) {
   const firstIndex = firstIndexOfCategory(category.id)
   activeCategoryId.value = category.id
   activeItemId.value = flatItems[firstIndex]?.item.id ?? activeItemId.value
-  startTween('cat', alignmentFor('cat', target))
-  startTween('item', alignmentFor('item', firstIndex))
+  alignTween('cat', target)
+  alignTween('item', firstIndex)
 }
 
 function stepRing(ring: RingName, step: number) {
@@ -836,6 +870,8 @@ function onPointerMove(event: PointerEvent) {
   let delta = angle - dragAngle
   if (delta > 180) delta -= 360
   if (delta < -180) delta += 360
+  // 鼠标/触屏给一点增益，拖起来更跟手（鼠标离圆心远，1:1 会显得很迟钝）
+  delta *= event.pointerType === 'mouse' ? MOUSE_DRAG_GAIN : TOUCH_DRAG_GAIN
   dragAngle = angle
   dragTravel += Math.abs(delta)
 
@@ -852,7 +888,7 @@ function syncFromCategoryDrag() {
   const firstIndex = firstIndexOfCategory(category.id)
   activeCategoryId.value = category.id
   activeItemId.value = flatItems[firstIndex]?.item.id ?? activeItemId.value
-  startTween('item', alignmentFor('item', firstIndex))
+  alignTween('item', firstIndex)
 }
 
 /** 拖外圈：条目带滑到哪条就选哪条；跨过分类边界时内圈跟着转过去 */
@@ -863,7 +899,7 @@ function syncFromItemDrag() {
   if (entry.item.id !== activeItemId.value) activeItemId.value = entry.item.id
   if (entry.category.id !== activeCategoryId.value) {
     activeCategoryId.value = entry.category.id
-    startTween('cat', alignmentFor('cat', categoryIndexOf(entry.category.id)))
+    alignTween('cat', categoryIndexOf(entry.category.id))
   }
 }
 
@@ -888,8 +924,7 @@ function onPointerUp(event: PointerEvent) {
       return
     }
   }
-  if (ring === 'item') startTween('item', alignmentFor('item', nearestIndex('item')))
-  else startTween('cat', alignmentFor('cat', nearestIndex('cat')))
+  alignTween(ring, nearestIndex(ring))
   schedulePaint()
 }
 
