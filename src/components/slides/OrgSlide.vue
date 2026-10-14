@@ -478,6 +478,15 @@ const presidiumSize = presidium.groups[0]?.size ?? ''
     display: none;
   }
 
+  /*
+   * 窄屏 / 竖屏不展示「部长团 / 普通成员 / 顾问团」这些叶子节点：
+   * 部门多、叶子多，一屏里铺开会很乱（PC 端保持原样）。
+   * 人数信息在下方概况面板的 chip 里仍然能看到。
+   */
+  .leaves {
+    display: none;
+  }
+
   .detail {
     border-top-width: 4px;
   }
