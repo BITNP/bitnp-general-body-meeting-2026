@@ -67,12 +67,12 @@ import { departments } from '../../data/departments'
 }
 
 .plan__name {
-  font-size: clamp(0.85rem, 2.1vmin, 1.1rem);
+  font-size: clamp(1.05rem, 2.4vmin, 1.5rem);
   color: var(--dept-color);
 }
 
 .plan__summary {
-  font-size: clamp(0.6rem, 1.4vmin, 0.74rem);
+  font-size: clamp(0.8rem, 1.85vmin, 1.05rem);
   line-height: 1.6;
   color: var(--text-dim);
   padding-bottom: 10px;
@@ -81,8 +81,8 @@ import { departments } from '../../data/departments'
 
 .plan__body {
   flex: 1;
-  font-size: clamp(0.64rem, 1.55vmin, 0.8rem);
-  line-height: 1.8;
+  font-size: clamp(1rem, 2.2vmin, 1.5rem);
+  line-height: 1.7;
   color: var(--text-dim);
 }
 

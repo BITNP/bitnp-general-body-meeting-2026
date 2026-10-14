@@ -97,9 +97,9 @@ const BAND_RATIO = 0.16
 const ITEM_FONT_RATIO = 0.062
 const CAT_FONT_RATIO = 0.055
 const ITEM_FONT_MIN = 9.5
-const ITEM_FONT_MAX = 13
+const ITEM_FONT_MAX = 16
 const CAT_FONT_MIN = 8.5
-const CAT_FONT_MAX = 11.5
+const CAT_FONT_MAX = 14
 /** 卡片内边距、行高、圆角与字号的比例 */
 const PAD_X_RATIO = 0.9
 const PAD_Y_RATIO = 0.6
@@ -1163,7 +1163,7 @@ watch([categoryIndex, itemIndex], () => schedulePaint())
 }
 
 .detail__title {
-  font-size: clamp(0.95rem, 2.3vmin, 1.35rem);
+  font-size: clamp(1.15rem, 2.6vmin, 1.7rem);
   line-height: 1.35;
 }
 
@@ -1171,7 +1171,7 @@ watch([categoryIndex, itemIndex], () => schedulePaint())
   flex: none;
   padding: 3px 10px;
   border-radius: 999px;
-  font-size: 0.6rem;
+  font-size: 0.8rem;
   color: var(--cat-color);
   border: 1px solid var(--cat-color);
   background: color-mix(in srgb, var(--cat-color) 12%, transparent);
@@ -1180,8 +1180,8 @@ watch([categoryIndex, itemIndex], () => schedulePaint())
 .detail__text {
   margin-top: 12px;
   max-width: 92ch;
-  font-size: clamp(0.7rem, 1.65vmin, 0.88rem);
-  line-height: 1.85;
+  font-size: clamp(1rem, 2.2vmin, 1.5rem);
+  line-height: 1.7;
   color: var(--text-dim);
 }
 
@@ -1201,14 +1201,14 @@ watch([categoryIndex, itemIndex], () => schedulePaint())
 }
 
 .detail__metrics dt {
-  font-size: 0.6rem;
+  font-size: 0.78rem;
   letter-spacing: 0.14em;
   color: var(--text-dim);
 }
 
 .detail__metrics dd {
   margin-top: 3px;
-  font-size: clamp(0.78rem, 1.9vmin, 1rem);
+  font-size: clamp(1rem, 2.2vmin, 1.4rem);
   font-weight: 700;
 }
 
@@ -1225,7 +1225,7 @@ watch([categoryIndex, itemIndex], () => schedulePaint())
   align-items: center;
   gap: 6px;
   margin-top: 16px;
-  font-size: clamp(0.66rem, 1.5vmin, 0.78rem);
+  font-size: clamp(0.9rem, 2vmin, 1.25rem);
   word-break: break-all;
 }
 

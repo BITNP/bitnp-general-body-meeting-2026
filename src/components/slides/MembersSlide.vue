@@ -80,7 +80,7 @@ import { members } from '../../data/members'
 .member__index {
   align-self: flex-start;
   font-family: 'Consolas', monospace;
-  font-size: 0.72rem;
+  font-size: 0.85rem;
   letter-spacing: 0.2em;
   color: var(--primary);
 }
@@ -90,14 +90,14 @@ import { members } from '../../data/members'
 }
 
 .member__name {
-  font-size: clamp(0.95rem, 2.4vmin, 1.3rem);
+  font-size: clamp(1.2rem, 2.7vmin, 1.85rem);
   font-weight: 700;
   letter-spacing: 0.04em;
 }
 
 .member__role {
   margin-top: 2px;
-  font-size: clamp(0.66rem, 1.6vmin, 0.8rem);
+  font-size: clamp(0.85rem, 1.95vmin, 1.15rem);
   letter-spacing: 0.12em;
   color: var(--text-dim);
 }
@@ -105,13 +105,13 @@ import { members } from '../../data/members'
 .member__bio {
   flex: 1;
   width: 100%;
-  font-size: clamp(0.68rem, 1.6vmin, 0.84rem);
-  line-height: 1.75;
+  font-size: clamp(1rem, 2.2vmin, 1.5rem);
+  line-height: 1.7;
   color: var(--text-dim);
 }
 
 .member__bio--empty {
-  min-height: 78px;
+  min-height: 120px;
   line-height: 1.6;
 }
 

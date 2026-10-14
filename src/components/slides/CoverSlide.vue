@@ -109,7 +109,7 @@ const tapeText = `${meeting.association} · 网络无限 开拓不懈 · ${meeti
 
 .cover__meeting {
   margin-top: clamp(8px, 2vmin, 22px);
-  font-size: clamp(0.85rem, 2.3vmin, 1.35rem);
+  font-size: clamp(1rem, 2.4vmin, 1.5rem);
   font-weight: 600;
   color: var(--text);
   letter-spacing: 0.02em;
@@ -123,7 +123,7 @@ const tapeText = `${meeting.association} · 网络无限 开拓不懈 · ${meeti
 }
 
 .cover__slogan-text {
-  font-size: clamp(0.75rem, 2vmin, 1.1rem);
+  font-size: clamp(0.95rem, 2.2vmin, 1.35rem);
   font-weight: 800;
   letter-spacing: 0.24em;
   color: var(--primary);
@@ -148,14 +148,14 @@ const tapeText = `${meeting.association} · 网络无限 开拓不懈 · ${meeti
 }
 
 .cover__meta dt {
-  font-size: 0.64rem;
+  font-size: 0.72rem;
   letter-spacing: 0.24em;
   color: var(--text-dim);
   margin-bottom: 4px;
 }
 
 .cover__meta dd {
-  font-size: clamp(0.76rem, 1.9vmin, 0.98rem);
+  font-size: clamp(0.95rem, 2.1vmin, 1.4rem);
   font-weight: 600;
 }
 

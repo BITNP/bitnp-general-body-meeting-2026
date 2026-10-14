@@ -50,7 +50,7 @@ const props = withDefaults(
 }
 
 .avatar__label {
-  font-size: 0.6rem;
+  font-size: 0.8rem;
   letter-spacing: 0.08em;
 }
 

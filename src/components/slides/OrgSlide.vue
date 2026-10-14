@@ -206,13 +206,13 @@ const presidiumSize = presidium.groups[0]?.size ?? ''
 }
 
 .node__name {
-  font-size: clamp(0.78rem, 1.9vmin, 1rem);
+  font-size: clamp(1rem, 2.05vmin, 1.25rem);
   font-weight: 700;
   color: var(--node-color, var(--text));
 }
 
 .node__meta {
-  font-size: clamp(0.56rem, 1.35vmin, 0.7rem);
+  font-size: clamp(0.75rem, 1.6vmin, 0.95rem);
   line-height: 1.4;
   color: var(--text-dim);
   display: -webkit-box;
@@ -231,7 +231,7 @@ const presidiumSize = presidium.groups[0]?.size ?? ''
 
 /* —— 部门节点 —— */
 .node--dept {
-  width: clamp(148px, 17vw, 200px);
+  width: clamp(160px, 13vw, 232px);
   border-left: 4px solid var(--dept-color);
   --node-color: var(--dept-color);
 }
@@ -340,14 +340,14 @@ const presidiumSize = presidium.groups[0]?.size ?? ''
 }
 
 .leaf__name {
-  font-size: clamp(0.62rem, 1.5vmin, 0.78rem);
+  font-size: clamp(0.9rem, 2vmin, 1.2rem);
   color: var(--text);
   white-space: nowrap;
 }
 
 .leaf__size {
   font-family: 'Consolas', monospace;
-  font-size: 0.58rem;
+  font-size: 0.8rem;
   color: var(--text-dim);
   white-space: nowrap;
 }
@@ -363,7 +363,7 @@ const presidiumSize = presidium.groups[0]?.size ?? ''
 }
 
 .detail__kind {
-  font-size: 0.6rem;
+  font-size: 0.72rem;
   letter-spacing: 0.28em;
   color: var(--text-dim);
 }
@@ -373,21 +373,21 @@ const presidiumSize = presidium.groups[0]?.size ?? ''
   align-items: center;
   gap: 8px;
   margin-top: 4px;
-  font-size: clamp(0.95rem, 2.3vmin, 1.35rem);
+  font-size: clamp(1.15rem, 2.6vmin, 1.7rem);
   color: var(--unit-color);
 }
 
 .detail__summary {
   margin-top: 8px;
-  font-size: clamp(0.62rem, 1.5vmin, 0.78rem);
+  font-size: clamp(0.85rem, 1.9vmin, 1.1rem);
   letter-spacing: 0.02em;
   color: var(--text-dim);
 }
 
 .detail__desc {
   margin-top: 12px;
-  font-size: clamp(0.68rem, 1.6vmin, 0.86rem);
-  line-height: 1.85;
+  font-size: clamp(1rem, 2.2vmin, 1.5rem);
+  line-height: 1.7;
   color: var(--text);
 }
 
@@ -405,7 +405,7 @@ const presidiumSize = presidium.groups[0]?.size ?? ''
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px dashed var(--border);
-  font-size: clamp(0.62rem, 1.5vmin, 0.78rem);
+  font-size: clamp(0.9rem, 2vmin, 1.2rem);
   line-height: 1.7;
   color: var(--text-dim);
 }

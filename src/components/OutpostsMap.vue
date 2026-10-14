@@ -215,7 +215,7 @@ function onBeaconClose() {
   justify-content: center;
   gap: 10px;
   color: rgba(255, 210, 74, 0.7);
-  font-size: 0.8rem;
+  font-size: 1rem;
   letter-spacing: 0.1em;
 }
 
@@ -241,7 +241,7 @@ function onBeaconClose() {
   border: 1px solid rgba(255, 210, 74, 0.35);
   background: rgba(12, 18, 34, 0.78);
   color: rgba(255, 210, 74, 0.85);
-  font-size: 0.74rem;
+  font-size: 1rem;
   cursor: pointer;
   pointer-events: auto;
   backdrop-filter: blur(6px);
@@ -338,7 +338,7 @@ function onBeaconClose() {
 }
 
 .outposts__title {
-  font-size: clamp(1rem, 2.4vmin, 1.5rem);
+  font-size: clamp(1.15rem, 2.6vmin, 1.7rem);
   letter-spacing: 0.06em;
   color: #ffe9a8;
   text-shadow: 0 0 18px rgba(255, 210, 74, 0.45);
@@ -352,7 +352,7 @@ function onBeaconClose() {
 
 .outposts__row {
   margin-bottom: 12px;
-  font-size: clamp(0.72rem, 1.7vmin, 0.86rem);
+  font-size: clamp(1rem, 2.2vmin, 1.45rem);
   line-height: 1.7;
   color: rgba(226, 232, 240, 0.85);
 }
@@ -360,7 +360,7 @@ function onBeaconClose() {
 .outposts__label {
   display: block;
   margin-bottom: 2px;
-  font-size: 0.62rem;
+  font-size: 0.8rem;
   letter-spacing: 0.2em;
   color: rgba(255, 210, 74, 0.65);
 }
@@ -398,7 +398,7 @@ function onBeaconClose() {
 
   .outposts__chip {
     padding: 4px 10px;
-    font-size: 0.68rem;
+    font-size: 0.9rem;
   }
 }
 

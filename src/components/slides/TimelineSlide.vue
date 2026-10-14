@@ -80,7 +80,7 @@ const isVertical = useMediaQuery('(max-width: 768px) and (min-height: 561px)')
 .ms {
   position: relative;
   flex: 0 0 auto;
-  width: clamp(186px, 21vw, 280px);
+  width: clamp(200px, 24vw, 320px);
   display: flex;
   scroll-snap-align: start;
 }
@@ -135,7 +135,7 @@ const isVertical = useMediaQuery('(max-width: 768px) and (min-height: 561px)')
 
 .ms__date {
   font-family: 'Consolas', monospace;
-  font-size: clamp(0.66rem, 1.5vmin, 0.78rem);
+  font-size: clamp(0.8rem, 1.85vmin, 1.05rem);
   font-weight: 700;
   color: var(--accent);
   letter-spacing: 0.06em;
@@ -144,26 +144,26 @@ const isVertical = useMediaQuery('(max-width: 768px) and (min-height: 561px)')
 .ms__cat {
   padding: 2px 8px;
   border-radius: 999px;
-  font-size: 0.58rem;
+  font-size: 0.78rem;
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   white-space: nowrap;
 }
 
 .ms__title {
-  font-size: clamp(0.82rem, 2vmin, 1.05rem);
+  font-size: clamp(1.05rem, 2.4vmin, 1.5rem);
   line-height: 1.4;
 }
 
 .ms__desc {
   flex: 1;
-  font-size: clamp(0.62rem, 1.5vmin, 0.78rem);
-  line-height: 1.75;
+  font-size: clamp(1rem, 2.2vmin, 1.45rem);
+  line-height: 1.7;
   color: var(--text-dim);
 }
 
 .ms__owner {
-  font-size: 0.6rem;
+  font-size: 0.85rem;
   letter-spacing: 0.06em;
   color: var(--text-dim);
   opacity: 0.85;

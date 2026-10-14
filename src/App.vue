@@ -259,7 +259,7 @@ onBeforeUnmount(() => {
 }
 
 .app__brand-text strong {
-  font-size: clamp(0.75rem, 1.8vmin, 0.95rem);
+  font-size: clamp(0.85rem, 1.95vmin, 1.1rem);
   letter-spacing: 0.04em;
 }
 

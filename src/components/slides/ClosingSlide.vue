@@ -78,7 +78,7 @@ import { meeting } from '../../data/deck'
 }
 
 .closing__slogan {
-  font-size: clamp(0.8rem, 2.1vmin, 1.15rem);
+  font-size: clamp(1rem, 2.3vmin, 1.4rem);
   font-weight: 800;
   letter-spacing: 0.32em;
   color: var(--primary);
@@ -101,7 +101,7 @@ import { meeting } from '../../data/deck'
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: clamp(0.78rem, 1.9vmin, 0.95rem);
+  font-size: clamp(1.05rem, 2.3vmin, 1.5rem);
   color: var(--primary);
   margin-bottom: 10px;
 }
@@ -118,7 +118,7 @@ import { meeting } from '../../data/deck'
 }
 
 .closing__links a {
-  font-size: clamp(0.68rem, 1.65vmin, 0.85rem);
+  font-size: clamp(1rem, 2.15vmin, 1.4rem);
 }
 
 .closing__note {

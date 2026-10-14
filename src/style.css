@@ -230,7 +230,7 @@ button {
   border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--surface-2);
-  font-size: clamp(0.6rem, 1.4vmin, 0.72rem);
+  font-size: clamp(0.72rem, 1.55vmin, 0.95rem);
   color: var(--text-dim);
   white-space: nowrap;
 }
@@ -250,7 +250,7 @@ button {
   border-radius: var(--radius-sm);
   color: var(--text-dim);
   background: color-mix(in srgb, var(--surface-2) 70%, transparent);
-  font-size: clamp(0.62rem, 1.5vmin, 0.78rem);
+  font-size: clamp(0.78rem, 1.75vmin, 1rem);
   letter-spacing: 0.08em;
   text-align: center;
   padding: 10px;
