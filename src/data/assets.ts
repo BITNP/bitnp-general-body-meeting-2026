@@ -7,8 +7,10 @@ import type { AssetCategory, AssetItem } from '../types'
  *  · assetCategories = 转盘内圈（4 个分类）
  *  · assetItems = 转盘外圈。外圈是一条"按分类顺序摊平"的连续条目带，
  *    所以数组顺序就是展示顺序：先第一个分类的所有条目，再第二个分类……
- *  · 条目上的 href 只填公网可访问的地址；「校园网内访问」的内部系统
- *    把地址写在 metrics 里，不填 href（点出去也打不开）
+ *  · 条目上的 links 可以放多条链接（一个仓库/一个站点一条），详情页下方逐条列出；
+ *    每条链接的 label 是地址前面的小字（「文档站」「模板仓库」……），省略就只显示地址
+ *  · links 一律填 https 地址，包括「校园网内访问」的内部系统
+ *    （校园网外点了打不开，但地址本身还是有意义的，详情页里也会照常列出来）
  *  · 详情页的关键数据、状态标记都来自这里；要改内容只改这个文件
  */
 
@@ -71,7 +73,7 @@ export const assetItems: AssetItem[] = [
       { label: '内容形式', value: '直播 · 录像' },
     ],
     tags: ['视频', '直播', '录播'],
-    href: 'https://space.bilibili.com/89756733',
+    links: [{ href: 'https://space.bilibili.com/89756733' }],
     status: '持续运营',
   },
   {
@@ -101,7 +103,7 @@ export const assetItems: AssetItem[] = [
       { label: '开源仓库', value: '100+ 个' },
     ],
     tags: ['开源', '组织主页'],
-    href: 'https://github.com/BITNP',
+    links: [{ href: 'https://github.com/BITNP' }],
     status: '持续维护',
   },
   {
@@ -116,7 +118,11 @@ export const assetItems: AssetItem[] = [
       { label: '配套仓库', value: 'BIThesis-wiki' },
     ],
     tags: ['LaTeX', '毕业论文', '对外开源'],
-    href: 'https://bithesis.bitnp.net/',
+    links: [
+      { label: '文档站', href: 'https://bithesis.bitnp.net/' },
+      { label: '模板仓库', href: 'https://github.com/BITNP/BIThesis' },
+      { label: 'Wiki 仓库', href: 'https://github.com/BITNP/BIThesis-wiki' },
+    ],
     status: '持续维护',
   },
   {
@@ -131,7 +137,12 @@ export const assetItems: AssetItem[] = [
       { label: '组成', value: '声音 · 调度 · 前端 · 拾音' },
     ],
     tags: ['虚拟主播', 'AI', '树莓娘'],
-    href: 'https://github.com/BITNP/bitnp-raspberrygirl-vtuber-orchestrator',
+    links: [
+      { label: '声音', href: 'https://github.com/BITNP/bitnp-raspberrygirl-vtuber-sound' },
+      { label: '调度', href: 'https://github.com/BITNP/bitnp-raspberrygirl-vtuber-orchestrator' },
+      { label: '前端', href: 'https://github.com/BITNP/bitnp-raspberrygirl-vtuber-frontend' },
+      { label: '拾音', href: 'https://github.com/BITNP/bitnp-raspberrygirl-vtuber-mic' },
+    ],
     status: '开发中',
   },
   {
@@ -142,7 +153,7 @@ export const assetItems: AssetItem[] = [
     description: '树莓娘 QQ 智能体：让吉祥物能直接进群聊和大家互动。',
     metrics: [{ label: '仓库', value: 'miss-raspberry-agent' }],
     tags: ['智能体', '树莓娘'],
-    href: 'https://github.com/BITNP/miss-raspberry-agent',
+    links: [{ href: 'https://github.com/BITNP/miss-raspberry-agent' }],
   },
   {
     id: 'raspberry-toolkit',
@@ -152,7 +163,7 @@ export const assetItems: AssetItem[] = [
     description: '获取计算机底层信息与性能指标的小工具，也是树莓娘系列项目的基础设施之一。',
     metrics: [{ label: '仓库', value: 'miss-raspberry-toolkit' }],
     tags: ['工具', '树莓娘'],
-    href: 'https://github.com/BITNP/miss-raspberry-toolkit',
+    links: [{ href: 'https://github.com/BITNP/miss-raspberry-toolkit' }],
   },
   {
     id: 'raspberry-pet',
@@ -162,7 +173,7 @@ export const assetItems: AssetItem[] = [
     description: '树莓娘桌宠初版：利用视频生成 AI 制作准二游级 UI 动画的一次实践尝试。',
     metrics: [{ label: '仓库', value: 'bitnp-desktop-pet' }],
     tags: ['桌宠', 'AI 生成'],
-    href: 'https://github.com/BITNP/bitnp-desktop-pet',
+    links: [{ href: 'https://github.com/BITNP/bitnp-desktop-pet' }],
   },
   {
     id: 'badges',
@@ -176,7 +187,10 @@ export const assetItems: AssetItem[] = [
       { label: '验证页', value: 'www-backup.bitnp.net' },
     ],
     tags: ['数字签名', '纪念章'],
-    href: 'https://github.com/BITNP/bitnp-badges',
+    links: [
+      { label: '仓库', href: 'https://github.com/BITNP/bitnp-badges' },
+      { label: '验证页', href: 'https://www-backup.bitnp.net/bitnp-badges' },
+    ],
   },
   {
     id: 'icebreaker',
@@ -190,7 +204,11 @@ export const assetItems: AssetItem[] = [
       { label: '用途', value: '部门破冰活动' },
     ],
     tags: ['小游戏', '技术部'],
-    href: 'https://github.com/BITNP/tech-icebreaker-2026',
+    links: [
+      { label: '单词对战', href: 'https://github.com/BITNP/wordle-competition' },
+      { label: '着色器玩具', href: 'https://github.com/BITNP/shaderflow' },
+      { label: '破冰工具箱', href: 'https://github.com/BITNP/tech-icebreaker-2026' },
+    ],
   },
   {
     id: 'gitlab',
@@ -204,6 +222,7 @@ export const assetItems: AssetItem[] = [
       { label: '访问范围', value: '校园网内' },
     ],
     tags: ['GitLab', '内网'],
+    links: [{ href: 'https://git.bitnp.net/' }],
   },
 
   /* ----------------------------------------------------- 校园服务与内部系统 */
@@ -229,7 +248,7 @@ export const assetItems: AssetItem[] = [
       '协会官网，新闻、博客、服务入口与部门介绍都汇集在这里；本次大会展示页的设计语言也来自官网。',
     metrics: [{ label: '地址', value: 'www.bitnp.net' }],
     tags: ['官网', '门户'],
-    href: 'https://www.bitnp.net/',
+    links: [{ href: 'https://www.bitnp.net/' }],
   },
   {
     id: 'passport',
@@ -243,6 +262,7 @@ export const assetItems: AssetItem[] = [
       { label: '访问范围', value: '校园网内' },
     ],
     tags: ['认证', '内网'],
+    links: [{ href: 'https://accounts.bitnp.net/' }],
     status: '内部系统',
   },
   {
@@ -257,6 +277,7 @@ export const assetItems: AssetItem[] = [
       { label: '用途', value: '项目进度看板' },
     ],
     tags: ['看板', '协作'],
+    links: [{ href: 'https://home.bitnp.net/' }],
     status: '内部系统',
   },
   {
@@ -271,6 +292,7 @@ export const assetItems: AssetItem[] = [
       { label: '权限', value: '仅电脑诊所' },
     ],
     tags: ['工单', '电脑诊所'],
+    links: [{ href: 'https://clinic.bitnp.net/' }],
     status: '内部系统',
   },
   {
@@ -282,6 +304,7 @@ export const assetItems: AssetItem[] = [
       '电脑诊所的维修知识库，沉淀常见故障与处理流程，校园网内访问。',
     metrics: [{ label: '地址', value: 'wiki.bitnp.net' }],
     tags: ['知识库', '电脑诊所'],
+    links: [{ href: 'https://wiki.bitnp.net/' }],
     status: '内部系统',
   },
   {
@@ -295,6 +318,7 @@ export const assetItems: AssetItem[] = [
       { label: '开放时间', value: '军训期间' },
     ],
     tags: ['竞赛', '新生'],
+    links: [{ href: 'https://contest.bitnp.net/' }],
   },
   {
     id: 'blog',
@@ -304,7 +328,7 @@ export const assetItems: AssetItem[] = [
     description: '协会博客，发布技术文章与活动记录。',
     metrics: [{ label: '地址', value: 'blog.bitnp.net' }],
     tags: ['博客', '内容'],
-    href: 'https://blog.bitnp.net/',
+    links: [{ href: 'https://blog.bitnp.net/' }],
   },
   {
     id: 'cloud',
@@ -318,6 +342,7 @@ export const assetItems: AssetItem[] = [
       { label: '存放内容', value: '义诊 · 活动文件' },
     ],
     tags: ['云盘', '文件'],
+    links: [{ href: 'https://cf.bitnp.net/' }],
   },
 
   /* --------------------------------------------------------- 设计资源与美术 IP */
@@ -347,6 +372,6 @@ export const assetItems: AssetItem[] = [
       { label: '内容', value: '形象 · 视觉素材' },
     ],
     tags: ['设计', '素材'],
-    href: 'https://github.com/BITNP/bitnp-design',
+    links: [{ href: 'https://github.com/BITNP/bitnp-design' }],
   },
 ]

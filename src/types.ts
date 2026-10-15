@@ -117,6 +117,14 @@ export interface AssetMetric {
   value: string
 }
 
+/** 数字资产条目对外的一条链接 */
+export interface AssetLink {
+  /** 链接前面的小字，例如「文档站」「模板仓库」；省略则只显示地址 */
+  label?: string
+  /** 完整地址（带 https:// 前缀） */
+  href: string
+}
+
 export interface AssetItem {
   id: string
   /** 所属分类 id */
@@ -129,8 +137,8 @@ export interface AssetItem {
   /** 关键数据（仓库数、粉丝数、访问量……） */
   metrics: AssetMetric[]
   tags: string[]
-  /** 外部链接（可选） */
-  href?: string
+  /** 外部链接（可选，可以多条）；校园网内访问的地址不填这里，写在 metrics 里 */
+  links?: AssetLink[]
   /** 状态标记，例如「持续维护」，留空则不显示 */
   status?: string
 }

@@ -39,6 +39,10 @@ const activeCategory = computed(
   () => assetCategories.find((category) => category.id === activeCategoryId.value) ?? assetCategories[0],
 )
 const activeItem = computed(() => assetItems.find((item) => item.id === activeItemId.value) ?? null)
+
+/** 链接的显示文字：去掉协议头和结尾斜杠，剩下的交给 CSS 断行 */
+const prettyUrl = (href: string) => href.replace(/^https?:\/\//, '').replace(/\/$/, '')
+
 const categoryIndexOf = (categoryId: string) =>
   Math.max(
     0,
@@ -1083,16 +1087,21 @@ watch([categoryIndex, itemIndex], () => schedulePaint())
             <li v-for="tag in activeItem.tags" :key="tag" class="chip">{{ tag }}</li>
           </ul>
 
-          <a
-            v-if="activeItem.href"
-            class="detail__link"
-            :href="activeItem.href"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <AppIcon name="external" size="0.95em" />
-            <span>{{ activeItem.href.replace(/^https?:\/\//, '').replace(/\/$/, '') }}</span>
-          </a>
+          <!-- 链接可以有多条（一个仓库 / 一个站点一条），这里的 label 只是地址前面的小字 -->
+          <ul v-if="activeItem.links?.length" class="detail__links">
+            <li v-for="link in activeItem.links" :key="link.href">
+              <a
+                class="detail__link"
+                :href="link.href"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <AppIcon name="external" size="0.95em" />
+                <span v-if="link.label" class="detail__link-label">{{ link.label }}</span>
+                <span class="detail__link-url">{{ prettyUrl(link.href) }}</span>
+              </a>
+            </li>
+          </ul>
         </article>
       </Transition>
     </div>
@@ -1239,13 +1248,42 @@ watch([categoryIndex, itemIndex], () => schedulePaint())
   list-style: none;
 }
 
-.detail__link {
-  display: inline-flex;
-  align-items: center;
+/* 一栏条目可能挂好几条链接（一个仓库一条），所以是一列小列表 */
+.detail__links {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 6px;
   margin-top: 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.detail__link {
+  display: inline-flex;
+  /* 地址换行时图标和小字都跟着第一行走，不要跟着整块居中 */
+  align-items: baseline;
+  gap: 6px;
   font-size: clamp(0.9rem, 2vmin, 1.25rem);
   word-break: break-all;
+}
+
+/* 图标自己贴一下基线（对齐规则是按它的下边缘算的，不挪会显得偏高） */
+.detail__link .app-icon {
+  margin-bottom: -0.15em;
+}
+
+/* 地址前面的小字，比如「文档站」「模板仓库」 */
+.detail__link-label {
+  flex: none;
+  font-weight: 700;
+}
+
+.detail__link-label::after {
+  content: '·';
+  margin-left: 6px;
+  font-weight: 400;
+  color: var(--text-dim);
 }
 
 .fade-enter-active,

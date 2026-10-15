@@ -68,7 +68,9 @@ Pages 默认就是 HTTPS，正好可以用来在手机上测陀螺仪（传感�
   头像把图片放进 `src/assets/members/`，然后 `import avatar1 from '../assets/members/1.png'` 再填到 `avatar`。
 - **数字资产**：`assets.ts`。`assetCategories` 是左侧分类，`assetItems` 是条目；
   页面上「选分类 → 选条目 → 看详情」是联动的。`metrics` 里填数据（粉丝数、访问量……），
-  未知的先写「待补充」。
+  未知的先写「待补充」；`links` 是详情页下方的链接列表，**一个条目可以放多条**
+  （一个仓库 / 一个站点一条，每条是 `{ label, href }`，`label` 是地址前面的小字、可省略，
+  例如「文档站」「模板仓库」）。
 - **时间轴**：`timeline.ts`。`date` / `category` / `color` 控制节点外观，`owner` 是主办部门。
 - **部门规划**：`departments.ts` 的 `plan` 字段，留空就显示占位框（内容是各部门自己写的）。
 - **封面信息**：`deck.ts` 的 `meeting`（日期、地点、主持人都还是「待定」）。
