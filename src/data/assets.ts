@@ -240,6 +240,22 @@ export const assetItems: AssetItem[] = [
     tags: ['预约', '电脑诊所'],
   },
   {
+    id: 'pc-recommend',
+    category: 'services',
+    name: '电脑推荐表',
+    summary: '电脑诊所整理的选购参考，每年更新',
+    description:
+      '由电脑诊所整理维护的电脑推荐表，每年更新一次：按自己的需求与预算，就能查到当下比较合适的电脑型号。最新一版是 2026 年版。',
+    metrics: [
+      { label: '维护方', value: '电脑诊所' },
+      { label: '更新频率', value: '每年更新' },
+      { label: '最新版本', value: '2026 年版' },
+    ],
+    tags: ['选购', '电脑诊所'],
+    links: [{ label: '2026 年版', href: 'https://docs.qq.com/aio/DTnZTRFRSUnpmWWZX' }],
+    status: '每年更新',
+  },
+  {
     id: 'website',
     category: 'services',
     name: '网协官网',

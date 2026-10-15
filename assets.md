@@ -69,6 +69,10 @@ i北理 -> 工作台最下面(IT服务) -> 电脑义诊
 ## 新生国防知识竞赛
 (校园网内访问，仅军训时开放) contest.bitnp.net
 
+## 电脑推荐表
+https://docs.qq.com/aio/DTnZTRFRSUnpmWWZX
+电脑诊所整理的电脑推荐表，每年更新，使用者可以根据自身需求与预算，查看当前比较合适的电脑型号。（当前为 2026 年版）
+
 ## 网协官网
 www.bitnp.net
 
@@ -108,7 +112,6 @@ cf.bitnp.net
 
 ## 其他设计资源
 https://github.com/BITNP/bitnp-design
-
 
 
 
