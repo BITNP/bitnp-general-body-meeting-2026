@@ -133,7 +133,7 @@ import { members } from '../../data/members'
 .member__bio {
   width: 100%;
   font-size: clamp(1rem, 2.2vmin, 1.5rem);
-  line-height: 1.7;
+  line-height: 1.5;
   color: var(--text-dim);
 }
 
