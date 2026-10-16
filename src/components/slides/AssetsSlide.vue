@@ -79,7 +79,11 @@ const ITEM_WINDOW = 2
 /** 拖动灵敏度：鼠标离圆心远，一点位移换算出的转角很小，所以给个增益 */
 const MOUSE_DRAG_GAIN = 2
 const TOUCH_DRAG_GAIN = 1.5
-/** 补间时长 */
+/**
+ * 补间时长。距离远近都一个时长就够了：外圈只画"选中项前后各两张"，
+ * 转得再远，看得见的也只是最后那两格（前面的格子 alpha 早就到 0 了），
+ * 所以远距离看起来还是一段正常速度的滑动，不会糊成一片。
+ */
 const TWEEN_MS = 420
 
 /*
@@ -258,25 +262,33 @@ function nearestIndex(ring: RingName) {
 const isClosedRing = (ring: RingName) => Math.abs(stepOf(ring) * ringList(ring).length - 360) < 0.001
 
 /**
- * 平滑滑到"让第 index 张卡片对正"的位置：
- *  · 闭合圆环（内圈）：取离当前角度最近的等价角，转得最短；
- *  · 条目带（外圈）：必须转到"带的位置正好等于 index"的那个角度——
- *    否则带会和选中项差出整数圈，下次一拖就跳。差得太远（键盘直接跳到很远的条目）
- *    就直接到位，不做长距离甩动。
+ * 转多少度算"转回同一幅画"：
+ *  · 内圈是闭合圆环 → 360°，多转整数圈和没转一样；
+ *  · 外圈是首尾相连的长条目带 → 整条带一圈（条目数 × 每格角度，目前 23 × 90° = 2070°），
+ *    多转一条带或少转一条带，可见范围、透明度、命中判定算出来都是同一幅画。
+ * 有了这个周期，"转到第 index 张"就永远可以只转最短的那条路。
+ */
+function periodOf(ring: RingName) {
+  return isClosedRing(ring) ? 360 : stepOf(ring) * ringList(ring).length
+}
+
+/**
+ * 平滑滑到"让第 index 张卡片对正"的位置。
+ *
+ * 目标角度取"离当前角度最近的那个等价角"（exact 加上整数个周期）：两个圈都适用，
+ * 所以不管离得多远都是补间过去，不会再"差太远就直接跳到位"。
+ * 早先只有内圈做了这件事，外圈差超过 360° 就突变，于是外圈会出现两种毛病：
+ *  · 拖 / 滚内圈跨到远处的分类时，外圈瞬间闪到该分类第一条；
+ *  · 停在第一条（rotation 0）往前退到最后一条时，目标 -1980° 差得太远，同样直接跳。
+ * 现在外圈退一格只会补间 +90°（等价于 -1980°），也就是"上一条滑进来"。
+ *
+ * 落到等价角而不是 exact 本身不会让带和选中项错位：beltOf 只按条目数取模用，
+ * 差整数条带的情形在上面 offsetOf / nearestIndex 里都会被折回同一格。
  */
 function alignTween(ring: RingName, index: number) {
   const exact = -index * stepOf(ring)
-  if (isClosedRing(ring)) {
-    startTween(ring, exact + 360 * Math.round((rotation[ring] - exact) / 360))
-    return
-  }
-  if (Math.abs(exact - rotation[ring]) > 360) {
-    delete tweens[ring]
-    rotation[ring] = exact
-    schedulePaint()
-    return
-  }
-  startTween(ring, exact)
+  const period = periodOf(ring)
+  startTween(ring, exact + period * Math.round((rotation[ring] - exact) / period))
 }
 
 const wrapIndex = (index: number, count: number) => (count > 0 ? ((index % count) + count) % count : 0)
