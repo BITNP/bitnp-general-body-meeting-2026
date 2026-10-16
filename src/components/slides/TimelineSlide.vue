@@ -108,6 +108,12 @@ const isVertical = useMediaQuery('(max-width: 768px) and (min-height: 561px)')
   margin-left: -6px;
   border-radius: 50%;
   background: var(--accent);
+  /*
+   * 轴线是列表自己的 ::after 画的，在 DOM 顺序上排在所有 li 后面，默认会压在圆点上，
+   * 于是圆点的描边光晕被轴线横穿一刀。这里把圆点单独抬一层：
+   * 圆点（连同 4px 的光晕）压住轴线，和它本来就压住连线是同一个效果。
+   */
+  z-index: 2;
   box-shadow: 0 0 0 4px var(--surface-2), 0 0 14px var(--accent);
 }
 
