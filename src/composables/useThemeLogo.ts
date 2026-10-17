@@ -1,6 +1,6 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import logoLight from '../assets/logo.png'
-import logoDark from '../assets/logo-dark.png'
+import logoLight from '../assets/logo.webp'
+import logoDark from '../assets/logo-dark.webp'
 
 /**
  * 亮 / 暗主题各有一张 logo，按当前主题换着用。
