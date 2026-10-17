@@ -10,6 +10,7 @@ import VenuesSlide from './components/slides/VenuesSlide.vue'
 import AssetsSlide from './components/slides/AssetsSlide.vue'
 import TimelineSlide from './components/slides/TimelineSlide.vue'
 import PlansSlide from './components/slides/PlansSlide.vue'
+import ShowSlide from './components/slides/ShowSlide.vue'
 import ClosingSlide from './components/slides/ClosingSlide.vue'
 import { meeting, slides } from './data/deck'
 import { useThemeLogo } from './composables/useThemeLogo'
@@ -213,6 +214,7 @@ onBeforeUnmount(() => {
         <AssetsSlide v-else-if="section.id === 'assets'" />
         <TimelineSlide v-else-if="section.id === 'timeline'" />
         <PlansSlide v-else-if="section.id === 'plans'" />
+        <ShowSlide v-else-if="section.id === 'show'" />
         <ClosingSlide v-else />
       </section>
     </main>

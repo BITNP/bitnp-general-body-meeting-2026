@@ -52,7 +52,8 @@ Pages 默认就是 HTTPS，正好可以用来在手机上测陀螺仪（传感�
 | 4 | 数字资产概况 | 4. 介绍组织数字资产概况 | `src/data/assets.ts` |
 | 5 | 接下来一年（时间轴） | 5. 重要活动时间节点 | `src/data/timeline.ts` |
 | 6 | 各部门发展规划 | 6. 各部门介绍发展规划 | `src/data/departments.ts`（`plan` 字段） |
-| 7 | 谢谢大家 | — | `src/components/slides/ClosingSlide.vue` |
+| 7 | 小节目与小游戏（现场空白屏） | 7. 现场小节目与小游戏 | `src/components/slides/ShowSlide.vue` |
+| 8 | 谢谢大家 | — | `src/components/slides/ClosingSlide.vue` |
 
 章节的顺序、侧栏里的名字与图标都来自 `src/data/deck.ts` 的 `slides` 数组；增删章节时同步改
 `src/App.vue` 里的 `v-if / v-else-if` 分支即可。
@@ -73,6 +74,8 @@ Pages 默认就是 HTTPS，正好可以用来在手机上测陀螺仪（传感�
   例如「文档站」「模板仓库」）。
 - **时间轴**：`timeline.ts`。`date` / `category` / `color` 控制节点外观，`owner` 是主办部门。
 - **部门规划**：`departments.ts` 的 `plan` 字段，留空就显示占位框（内容是各部门自己写的）。
+- **小节目与小游戏**：`ShowSlide.vue`。和「各部门发展规划」一样是标题 + 留白的现场屏，
+  标题和说明直接写在组件里（没有单独的数据文件）。
 - **封面信息**：`deck.ts` 的 `meeting`（日期、地点、主持人都还是「待定」）。
 
 ## 交互

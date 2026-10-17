@@ -20,5 +20,6 @@ export const slides: SlideMeta[] = [
   { id: 'assets', nav: '数字资产', title: '数字资产概况', kicker: 'AGENDA 04', icon: 'layers' },
   { id: 'timeline', nav: '年度节点', title: '接下来一年', kicker: 'AGENDA 05', icon: 'calendar' },
   { id: 'plans', nav: '部门规划', title: '各部门发展规划', kicker: 'AGENDA 06', icon: 'target' },
+  { id: 'show', nav: '小节目与小游戏', title: '小节目与小游戏', kicker: 'AGENDA 07', icon: 'sparkles' },
   { id: 'closing', nav: '结束', title: '谢谢大家', kicker: 'THANKS', icon: 'send' },
 ]
